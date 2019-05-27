@@ -65,6 +65,9 @@
     <Filter Include="リソース ファイル\eval\nnue\trainer\features">
       <UniqueIdentifier>{6e8ef4d1-31b3-42c5-b6a5-a0b811d671bb}</UniqueIdentifier>
     </Filter>
+    <Filter Include="tensorboard">
+      <UniqueIdentifier>{fd0a3c76-f088-4555-b000-b12d1383e260}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="evaluate.h">
@@ -398,6 +401,30 @@
     </ClCompile>
     <ClCompile Include="usi_option.cpp">
       <Filter>リソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\tensorboard_logger\src\crc.cc">
+      <Filter>tensorboard</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\tensorboard_logger\src\event.pb.cc">
+      <Filter>tensorboard</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\tensorboard_logger\src\resource_handle.pb.cc">
+      <Filter>tensorboard</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\tensorboard_logger\src\summary.pb.cc">
+      <Filter>tensorboard</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\tensorboard_logger\src\tensor.pb.cc">
+      <Filter>tensorboard</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\tensorboard_logger\src\tensor_shape.pb.cc">
+      <Filter>tensorboard</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\tensorboard_logger\src\tensorboard_logger.cc">
+      <Filter>tensorboard</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\tensorboard_logger\src\types.pb.cc">
+      <Filter>tensorboard</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

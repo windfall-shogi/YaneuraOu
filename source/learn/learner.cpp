@@ -1,4 +1,4 @@
-﻿#include "../config.h"
+#include "../config.h"
 
 // 学習関係のルーチン
 //
@@ -78,6 +78,9 @@
 #if defined(EVAL_NNUE)
 #include "../eval/nnue/evaluate_nnue_learner.h"
 #include <shared_mutex>
+#if defined(USE_TENSORBOARD)
+#include "tensorboard_logger.h"
+#endif
 #endif
 
 using namespace std;
@@ -1498,7 +1501,12 @@ protected:
 // 複数スレッドでsfenを生成するためのクラス
 struct LearnerThink: public MultiThink
 {
+#if defined(EVAL_NNUE) && defined(USE_TENSORBOARD)
+  LearnerThink(SfenReader& sr_, const char* log_pb) :
+    sr(sr_), stop_flag(false), save_only_once(false), tb_logger(log_pb)
+#else
 	LearnerThink(SfenReader& sr_):sr(sr_),stop_flag(false), save_only_once(false)
+#endif
 	{
 #if defined ( LOSS_FUNCTION_IS_ELMO_METHOD )
 		learn_sum_cross_entropy_eval = 0.0;
@@ -1574,6 +1582,9 @@ struct LearnerThink: public MultiThink
 	double latest_loss_sum;
 	u64 latest_loss_count;
 	std::string best_nn_directory;
+#if defined(USE_TENSORBOARD)
+  TensorBoardLogger tb_logger;
+#endif
 #endif
 
 	u64 eval_save_interval;
@@ -1772,6 +1783,14 @@ void LearnerThink::calc_loss(size_t thread_id, u64 done)
 			<< " , test_entropy = "             << test_sum_entropy / sr.sfen_for_mse.size()
 			<< " , norm = "						<< sum_norm
 			<< " , move accuracy = "			<< (move_accord_count * 100.0 / sr.sfen_for_mse.size()) << "%";
+    tb_logger.add_scalar("test/cross_entropy/eval", epoch, test_sum_cross_entropy_eval / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/cross_entropy/win", epoch, test_sum_cross_entropy_win / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/entropy/eval", epoch, test_sum_entropy_eval / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/entropy/win", epoch, test_sum_entropy_win / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/cross_entropy", epoch, test_sum_cross_entropy / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/entropy", epoch, test_sum_entropy / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("norm", epoch, sum_norm);
+    tb_logger.add_scalar("move_accuracy", epoch, move_accord_count * 100.0 / sr.sfen_for_mse.size());
 		if (done != static_cast<u64>(-1))
 		{
 			cout
@@ -1781,6 +1800,12 @@ void LearnerThink::calc_loss(size_t thread_id, u64 done)
 				<< " , learn_entropy_win = "        << learn_sum_entropy_win / done
 				<< " , learn_cross_entropy = "      << learn_sum_cross_entropy / done
 				<< " , learn_entropy = "            << learn_sum_entropy / done;
+      tb_logger.add_scalar("learn/cross_entropy/eval", epoch, learn_sum_cross_entropy_eval / done);
+      tb_logger.add_scalar("learn/cross_entropy/win", epoch, learn_sum_cross_entropy_win / done);
+      tb_logger.add_scalar("learn/entropy/eval", epoch, learn_sum_entropy_eval / done);
+      tb_logger.add_scalar("learn/entropy/win", epoch, learn_sum_entropy_win / done);
+      tb_logger.add_scalar("learn/cross_entropy", epoch, learn_sum_cross_entropy / done);
+      tb_logger.add_scalar("learn/entropy", epoch, learn_sum_entropy / done);
 		}
 		cout << endl;
 	}
@@ -2500,7 +2525,13 @@ void learn(Position&, istringstream& is)
 	auto thread_num = (int)Options["Threads"];
 	SfenReader sr(thread_num);
 
+#if defined(EVAL_NNUE) && defined(USE_TENSORBOARD)
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+  auto log_dir = Path::Combine(Options["EvalSaveDir"], "log.pb");
+  LearnerThink learn_think(sr, log_dir.c_str());
+#else
 	LearnerThink learn_think(sr);
+#endif
 	vector<string> filenames;
 
 	// mini_batch_size デフォルトで1M局面。これを大きくできる。
@@ -2928,6 +2959,11 @@ void learn(Position&, istringstream& is)
 
 	// 最後に一度保存。
 	learn_think.save(true);
+
+#if defined(EVAL_NNUE) && defined(USE_TENSORBOARD)
+  // Optional:  Delete all global objects allocated by libprotobuf.
+  google::protobuf::ShutdownProtobufLibrary();
+#endif
 
 #if defined(USE_GLOBAL_OPTIONS)
 	// GlobalOptionsの復元。

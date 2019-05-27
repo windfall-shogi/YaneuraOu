@@ -555,7 +555,13 @@
     <ClCompile>
       <OpenMPSupport>
       </OpenMPSupport>
+      <AdditionalIncludeDirectories>$(SolutionDir)externals\tensorboard_logger\include;$(SolutionDir)externals\protobuf\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>USE_AVX2;USE_TENSORBOARD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(SolutionDir)externals\protobuf\cmake\build\Release</AdditionalLibraryDirectories>
+      <AdditionalDependencies>libprotobuf.lib;libprotoc.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-2018-TNK-sse42|x64'">
     <ClCompile>
@@ -684,6 +690,14 @@
     <ClInclude Include="usi.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\externals\tensorboard_logger\src\crc.cc" />
+    <ClCompile Include="..\externals\tensorboard_logger\src\event.pb.cc" />
+    <ClCompile Include="..\externals\tensorboard_logger\src\resource_handle.pb.cc" />
+    <ClCompile Include="..\externals\tensorboard_logger\src\summary.pb.cc" />
+    <ClCompile Include="..\externals\tensorboard_logger\src\tensor.pb.cc" />
+    <ClCompile Include="..\externals\tensorboard_logger\src\tensorboard_logger.cc" />
+    <ClCompile Include="..\externals\tensorboard_logger\src\tensor_shape.pb.cc" />
+    <ClCompile Include="..\externals\tensorboard_logger\src\types.pb.cc" />
     <ClCompile Include="bitboard.cpp" />
     <ClCompile Include="engine\2018-otafuku-engine\2018-otafuku-search.cpp" />
     <ClCompile Include="engine\mate-engine\mate-search.cpp" />
