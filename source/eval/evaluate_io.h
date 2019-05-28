@@ -5,6 +5,7 @@
 
 #include "../types.h"
 #include <vector>
+#include <cstring>
 
 namespace EvalIO
 {

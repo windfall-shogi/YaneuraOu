@@ -13,7 +13,8 @@
 #include <sstream>
 #if defined(USE_BLAS)
 static_assert(std::is_same<LearnFloatType, float>::value, "");
-#include <cblas.h>
+//#include <cblas.h>
+#include "mkl.h"
 #endif
 
 namespace Eval {

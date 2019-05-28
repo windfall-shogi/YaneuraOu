@@ -1,8 +1,8 @@
 # > Select YaneuraOu edition below.
 
-YANEURAOU_EDITION = YANEURAOU_2018_OTAFUKU_ENGINE
+#YANEURAOU_EDITION = YANEURAOU_2018_OTAFUKU_ENGINE
 #YANEURAOU_EDITION = MATE_ENGINE
-#YANEURAOU_EDITION = YANEURAOU_2018_TNK_ENGINE
+YANEURAOU_EDITION = YANEURAOU_2018_TNK_ENGINE
 
 
 # clangでコンパイルしたほうがgccより数%速いっぽい。
@@ -10,11 +10,11 @@ YANEURAOU_EDITION = YANEURAOU_2018_OTAFUKU_ENGINE
 COMPILER = clang++
 
 # 標準的なコンパイルオプション
-CFLAGS   = -std=c++14 -fno-exceptions -fno-rtti -Wextra -Ofast -MMD -MP -fpermissive
+CFLAGS   = -std=c++14 -fno-exceptions -Wextra -Ofast -MMD -MP -fpermissive -DUSE_TENSORBOARD
 WCFLAGS  =
-LDFLAGS  =
+LDFLAGS  = -ltensorboard_logger -L../externals/tensorboard_logger -lprotobuf
 LIBS     =
-INCLUDE  = # -I../include
+INCLUDE  = -I../externals/tensorboard_logger/include
 
 # clang用にCFLAGSなどを変更
 ifeq ($(findstring clang++,$(COMPILER)),clang++)
@@ -42,7 +42,7 @@ ifeq ($(OS),Windows_NT)
 	TARGET = YaneuraOu-by-gcc.exe
 else
 	CFLAGS += -D_LINUX
-	TARGET = YaneuraOu-by-gcc
+	TARGET = YaneuraOu-tb
 endif
 
 # リンク時最適化。これをつけるとmsys2環境だとセグフォで落ちる。
@@ -63,7 +63,7 @@ LDFLAGS += -Wl,-s
 # CFLAGS += -D_WIN64
 
 # これを指定していると、各CPU向けの実行ファイルが生成されないので指定すべきではない。
-# CFLAGS   += -march=native
+CFLAGS   += -march=native
 
 # デバッグ情報を付加
 # CFLAGS  += -g3 -ggdb
@@ -88,7 +88,7 @@ ifeq ($(findstring clang++,$(COMPILER)),clang++)
 	OPENMP_LDFLAGS = -lomp
 	ifeq ($(YANEURAOU_EDITION),YANEURAOU_2018_TNK_ENGINE)
 		BLAS = -DUSE_BLAS
-		BLAS_LDFLAGS = -lopenblas
+		BLAS_LDFLAGS = -lmkl_core -lmkl_intel_lp64 -lmkl_def -lmkl_intel_thread 
 		ifeq ($(MSYSTEM),MINGW64)
 			BLAS += -I$(shell cygpath -aw /mingw64/include/OpenBLAS)
 		endif
@@ -96,7 +96,7 @@ ifeq ($(findstring clang++,$(COMPILER)),clang++)
 endif
 
 CFLAGS += -DNO_EXCEPTIONS
-LDFLAGS += -lpthread
+LDFLAGS += -lpthread 
 LDFLAGS += -v
 
 OBJDIR   = ../obj

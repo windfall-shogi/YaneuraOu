@@ -29,6 +29,7 @@
 #include <fstream>
 #include <iomanip>
 #include <cmath>	// std::log(),std::pow(),std::round()
+#include <cstring>
 
 #include "../../position.h"
 #include "../../search.h"
