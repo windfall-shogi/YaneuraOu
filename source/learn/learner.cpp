@@ -1503,7 +1503,7 @@ struct LearnerThink: public MultiThink
 {
 #if defined(EVAL_NNUE) && defined(USE_TENSORBOARD)
   LearnerThink(SfenReader& sr_, const char* log_pb) :
-    sr(sr_), stop_flag(false), save_only_once(false), tb_logger(log_pb)
+    sr(sr_), stop_flag(false), save_only_once(false), tb_logger(log_pb), offset_epoch(0)
 #else
 	LearnerThink(SfenReader& sr_):sr(sr_),stop_flag(false), save_only_once(false)
 #endif
@@ -1584,6 +1584,8 @@ struct LearnerThink: public MultiThink
 	std::string best_nn_directory;
 #if defined(USE_TENSORBOARD)
   TensorBoardLogger tb_logger;
+  // tensorboardの横軸のオフセット
+  u64 offset_epoch;
 #endif
 #endif
 
@@ -1783,14 +1785,14 @@ void LearnerThink::calc_loss(size_t thread_id, u64 done)
 			<< " , test_entropy = "             << test_sum_entropy / sr.sfen_for_mse.size()
 			<< " , norm = "						<< sum_norm
 			<< " , move accuracy = "			<< (move_accord_count * 100.0 / sr.sfen_for_mse.size()) << "%";
-    tb_logger.add_scalar("test/cross_entropy/eval", epoch, test_sum_cross_entropy_eval / sr.sfen_for_mse.size());
-    tb_logger.add_scalar("test/cross_entropy/win", epoch, test_sum_cross_entropy_win / sr.sfen_for_mse.size());
-    tb_logger.add_scalar("test/entropy/eval", epoch, test_sum_entropy_eval / sr.sfen_for_mse.size());
-    tb_logger.add_scalar("test/entropy/win", epoch, test_sum_entropy_win / sr.sfen_for_mse.size());
-    tb_logger.add_scalar("test/cross_entropy", epoch, test_sum_cross_entropy / sr.sfen_for_mse.size());
-    tb_logger.add_scalar("test/entropy", epoch, test_sum_entropy / sr.sfen_for_mse.size());
-    tb_logger.add_scalar("norm", epoch, sum_norm);
-    tb_logger.add_scalar("move_accuracy", epoch, move_accord_count * 100.0 / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/cross_entropy/eval", epoch + offset_epoch, test_sum_cross_entropy_eval / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/cross_entropy/win", epoch + offset_epoch, test_sum_cross_entropy_win / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/entropy/eval", epoch + offset_epoch, test_sum_entropy_eval / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/entropy/win", epoch + offset_epoch, test_sum_entropy_win / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/cross_entropy", epoch + offset_epoch, test_sum_cross_entropy / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("test/entropy", epoch + offset_epoch, test_sum_entropy / sr.sfen_for_mse.size());
+    tb_logger.add_scalar("norm", epoch + offset_epoch, sum_norm);
+    tb_logger.add_scalar("move_accuracy", epoch + offset_epoch, move_accord_count * 100.0 / sr.sfen_for_mse.size());
 		if (done != static_cast<u64>(-1))
 		{
 			cout
@@ -1800,12 +1802,12 @@ void LearnerThink::calc_loss(size_t thread_id, u64 done)
 				<< " , learn_entropy_win = "        << learn_sum_entropy_win / done
 				<< " , learn_cross_entropy = "      << learn_sum_cross_entropy / done
 				<< " , learn_entropy = "            << learn_sum_entropy / done;
-      tb_logger.add_scalar("learn/cross_entropy/eval", epoch, learn_sum_cross_entropy_eval / done);
-      tb_logger.add_scalar("learn/cross_entropy/win", epoch, learn_sum_cross_entropy_win / done);
-      tb_logger.add_scalar("learn/entropy/eval", epoch, learn_sum_entropy_eval / done);
-      tb_logger.add_scalar("learn/entropy/win", epoch, learn_sum_entropy_win / done);
-      tb_logger.add_scalar("learn/cross_entropy", epoch, learn_sum_cross_entropy / done);
-      tb_logger.add_scalar("learn/entropy", epoch, learn_sum_entropy / done);
+      tb_logger.add_scalar("learn/cross_entropy/eval", epoch + offset_epoch, learn_sum_cross_entropy_eval / done);
+      tb_logger.add_scalar("learn/cross_entropy/win", epoch + offset_epoch, learn_sum_cross_entropy_win / done);
+      tb_logger.add_scalar("learn/entropy/eval", epoch + offset_epoch, learn_sum_entropy_eval / done);
+      tb_logger.add_scalar("learn/entropy/win", epoch + offset_epoch, learn_sum_entropy_win / done);
+      tb_logger.add_scalar("learn/cross_entropy", epoch + offset_epoch, learn_sum_cross_entropy / done);
+      tb_logger.add_scalar("learn/entropy", epoch + offset_epoch, learn_sum_entropy / done);
 		}
 		cout << endl;
 	}
@@ -2526,8 +2528,11 @@ void learn(Position&, istringstream& is)
 	SfenReader sr(thread_num);
 
 #if defined(EVAL_NNUE) && defined(USE_TENSORBOARD)
+  char buf[64];
+  std::time_t t = std::time(nullptr);
+  strftime(buf, sizeof(buf), "tfevents.%Y%m%d%H%M%S.pb", std::localtime(&t));
   GOOGLE_PROTOBUF_VERIFY_VERSION;
-  auto log_dir = Path::Combine(Options["EvalSaveDir"], "log.pb");
+  auto log_dir = Path::Combine(Options["EvalSaveDir"], buf);
   LearnerThink learn_think(sr, log_dir.c_str());
 #else
 	LearnerThink learn_think(sr);
@@ -2628,73 +2633,77 @@ void learn(Position&, istringstream& is)
 			break;
 
 		// mini-batchの局面数を指定
-		if (option == "bat")
-		{
-			is >> mini_batch_size;
-			mini_batch_size *= 10000; // 単位は万
-		}
+    if (option == "bat")
+    {
+      is >> mini_batch_size;
+      mini_batch_size *= 10000; // 単位は万
+    }
 
-		// 棋譜が格納されているフォルダを指定して、根こそぎ対象とする。
-		else if (option == "targetdir") is >> target_dir;
+    // 棋譜が格納されているフォルダを指定して、根こそぎ対象とする。
+    else if (option == "targetdir") is >> target_dir;
 
-		// ループ回数の指定
-		else if (option == "loop")      is >> loop;
+    // ループ回数の指定
+    else if (option == "loop")      is >> loop;
 
-		// 棋譜ファイル格納フォルダ(ここから相対pathで棋譜ファイルを取得)
-		else if (option == "basedir")   is >> base_dir;
+    // 棋譜ファイル格納フォルダ(ここから相対pathで棋譜ファイルを取得)
+    else if (option == "basedir")   is >> base_dir;
 
-		// ミニバッチのサイズ
-		else if (option == "batchsize") is >> mini_batch_size;
+    // ミニバッチのサイズ
+    else if (option == "batchsize") is >> mini_batch_size;
 
-		// 学習率
-		else if (option == "eta")        is >> eta1;
-		else if (option == "eta1")       is >> eta1; // alias
-		else if (option == "eta2")       is >> eta2;
-		else if (option == "eta3")       is >> eta3;
-		else if (option == "eta1_epoch") is >> eta1_epoch;
-		else if (option == "eta2_epoch") is >> eta2_epoch;
+    // 学習率
+    else if (option == "eta")        is >> eta1;
+    else if (option == "eta1")       is >> eta1; // alias
+    else if (option == "eta2")       is >> eta2;
+    else if (option == "eta3")       is >> eta3;
+    else if (option == "eta1_epoch") is >> eta1_epoch;
+    else if (option == "eta2_epoch") is >> eta2_epoch;
 
-		// 割引率
-		else if (option == "discount_rate") is >> discount_rate;
+    // 割引率
+    else if (option == "discount_rate") is >> discount_rate;
 
-		// KK/KKP/KPP/KPPPの学習なし。
-		else if (option == "freeze_kk")    is >> freeze[0];
-		else if (option == "freeze_kkp")   is >> freeze[1];
-		else if (option == "freeze_kpp")   is >> freeze[2];
+    // KK/KKP/KPP/KPPPの学習なし。
+    else if (option == "freeze_kk")    is >> freeze[0];
+    else if (option == "freeze_kkp")   is >> freeze[1];
+    else if (option == "freeze_kpp")   is >> freeze[2];
 
 #if defined(EVAL_KPPT) || defined(EVAL_KPP_KKPT) || defined(EVAL_KPP_KKPT_FV_VAR) || defined(EVAL_NABLA)
 
 #elif defined(EVAL_KPPPT) || defined(EVAL_KPPP_KKPT) || defined(EVAL_HELICES)
-		else if (option == "freeze_kppp")  is >> freeze[3];
+    else if (option == "freeze_kppp")  is >> freeze[3];
 #elif defined(EVAL_KKPP_KKPT) || defined(EVAL_KKPPT)
-		else if (option == "freeze_kkpp")  is >> freeze[3];
+    else if (option == "freeze_kkpp")  is >> freeze[3];
 #endif
 
 #if defined (LOSS_FUNCTION_IS_ELMO_METHOD)
-		// LAMBDA
-		else if (option == "lambda")       is >> ELMO_LAMBDA;
-		else if (option == "lambda2")      is >> ELMO_LAMBDA2;
-		else if (option == "lambda_limit") is >> ELMO_LAMBDA_LIMIT;
+    // LAMBDA
+    else if (option == "lambda")       is >> ELMO_LAMBDA;
+    else if (option == "lambda2")      is >> ELMO_LAMBDA2;
+    else if (option == "lambda_limit") is >> ELMO_LAMBDA_LIMIT;
 
 #endif
-		else if (option == "reduction_gameply") is >> reduction_gameply;
+    else if (option == "reduction_gameply") is >> reduction_gameply;
 
-		// シャッフル関連
-		else if (option == "shuffle")	shuffle_normal = true;
-		else if (option == "buffer_size") is >> buffer_size;
-		else if (option == "shuffleq")	shuffle_quick = true;
-		else if (option == "shufflem")	shuffle_on_memory = true;
-		else if (option == "output_file_name") is >> output_file_name;
+    // シャッフル関連
+    else if (option == "shuffle")	shuffle_normal = true;
+    else if (option == "buffer_size") is >> buffer_size;
+    else if (option == "shuffleq")	shuffle_quick = true;
+    else if (option == "shufflem")	shuffle_on_memory = true;
+    else if (option == "output_file_name") is >> output_file_name;
 
-		else if (option == "eval_limit") is >> eval_limit;
-		else if (option == "save_only_once") save_only_once = true;
-		else if (option == "no_shuffle") no_shuffle = true;
+    else if (option == "eval_limit") is >> eval_limit;
+    else if (option == "save_only_once") save_only_once = true;
+    else if (option == "no_shuffle") no_shuffle = true;
 
 #if defined(EVAL_NNUE)
-		else if (option == "nn_batch_size") is >> nn_batch_size;
-		else if (option == "newbob_decay") is >> newbob_decay;
-		else if (option == "newbob_num_trials") is >> newbob_num_trials;
-		else if (option == "nn_options") is >> nn_options;
+    else if (option == "nn_batch_size") is >> nn_batch_size;
+    else if (option == "newbob_decay") is >> newbob_decay;
+    else if (option == "newbob_num_trials") is >> newbob_num_trials;
+    else if (option == "nn_options") is >> nn_options;
+#if defined(USE_TENSORBOARD)
+    // tensorboardの横軸のオフセット
+    else if (option == "offset_epoch") is >> learn_think.offset_epoch;
+#endif // defined(USE_TENSORBOARD)
 #endif
 		else if (option == "eval_save_interval") is >> eval_save_interval;
 		else if (option == "loss_output_interval") is >> loss_output_interval;
