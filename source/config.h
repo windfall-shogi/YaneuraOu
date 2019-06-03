@@ -275,6 +275,8 @@
 // 学習機能を有効にするオプション。
 #define EVAL_LEARN
 
+#define USE_TENSORBOARD
+
 // デバッグ絡み
 //#define ASSERT_LV 3
 //#define USE_DEBUG_ASSERT

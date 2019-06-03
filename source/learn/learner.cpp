@@ -1776,6 +1776,7 @@ void LearnerThink::calc_loss(size_t thread_id, u64 done)
 			<< " , test_entropy = "             << test_sum_entropy / sr.sfen_for_mse.size()
 			<< " , norm = "						<< sum_norm
 			<< " , move accuracy = "			<< (move_accord_count * 100.0 / sr.sfen_for_mse.size()) << "%";
+#if defined(USE_TENSORBOARD)
     tb_logger.add_scalar("test/cross_entropy/eval", epoch + offset_epoch, test_sum_cross_entropy_eval / sr.sfen_for_mse.size());
     tb_logger.add_scalar("test/cross_entropy/win", epoch + offset_epoch, test_sum_cross_entropy_win / sr.sfen_for_mse.size());
     tb_logger.add_scalar("test/entropy/eval", epoch + offset_epoch, test_sum_entropy_eval / sr.sfen_for_mse.size());
@@ -1784,6 +1785,7 @@ void LearnerThink::calc_loss(size_t thread_id, u64 done)
     tb_logger.add_scalar("test/entropy", epoch + offset_epoch, test_sum_entropy / sr.sfen_for_mse.size());
     tb_logger.add_scalar("norm", epoch + offset_epoch, sum_norm);
     tb_logger.add_scalar("move_accuracy", epoch + offset_epoch, move_accord_count * 100.0 / sr.sfen_for_mse.size());
+#endif
 		if (done != static_cast<u64>(-1))
 		{
 			cout
@@ -1793,12 +1795,14 @@ void LearnerThink::calc_loss(size_t thread_id, u64 done)
 				<< " , learn_entropy_win = "        << learn_sum_entropy_win / done
 				<< " , learn_cross_entropy = "      << learn_sum_cross_entropy / done
 				<< " , learn_entropy = "            << learn_sum_entropy / done;
+#if defined(USE_TENSORBOARD)
       tb_logger.add_scalar("learn/cross_entropy/eval", epoch + offset_epoch, learn_sum_cross_entropy_eval / done);
       tb_logger.add_scalar("learn/cross_entropy/win", epoch + offset_epoch, learn_sum_cross_entropy_win / done);
       tb_logger.add_scalar("learn/entropy/eval", epoch + offset_epoch, learn_sum_entropy_eval / done);
       tb_logger.add_scalar("learn/entropy/win", epoch + offset_epoch, learn_sum_entropy_win / done);
       tb_logger.add_scalar("learn/cross_entropy", epoch + offset_epoch, learn_sum_cross_entropy / done);
       tb_logger.add_scalar("learn/entropy", epoch + offset_epoch, learn_sum_entropy / done);
+#endif
 		}
 		cout << endl;
 	}

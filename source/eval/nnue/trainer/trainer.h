@@ -11,10 +11,14 @@
 #include "../features/index_list.h"
 
 #include <sstream>
-#if defined(USE_BLAS)
+#if defined(USE_BLAS) || defined(USE_MKL)
 static_assert(std::is_same<LearnFloatType, float>::value, "");
-//#include <cblas.h>
+#if defined(USE_BLAS)
+#include <cblas.h>
+#endif
+#if defined(USE_MKL)
 #include "mkl.h"
+#endif
 #endif
 
 namespace Eval {
