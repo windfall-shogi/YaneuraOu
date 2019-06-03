@@ -4,7 +4,6 @@
 #include "search.h"
 #include "thread.h"
 #include "tt.h"
-#include "misc.h" // こちらのgetline()を呼び出す必要がある。
 
 #include <sstream>
 #include <queue>
@@ -20,7 +19,6 @@ void user_test(Position& pos, std::istringstream& is);
 // サンプル用のコードを含めてtest.cppのほうに色々書いてあるのでそれを呼び出すために使う。
 #if defined(ENABLE_TEST_CMD)
 	void test_cmd(Position& pos, istringstream& is);
-	void perft(Position& pos, istringstream& is);
 	void generate_moves_cmd(Position& pos);
 #if defined(MATE_ENGINE)
 	void test_mate_engine_cmd(Position& pos, istringstream& is);
@@ -298,7 +296,6 @@ void is_ready(bool skipCorruptCheck)
 	Search::clear();
 	Time.availableNodes = 0;
 
-	Threads.main()->received_go_ponder = false;
 	Threads.stop = false;
 
 	// keep aliveを送信するために生成したスレッドを終了させ、待機する。
@@ -405,7 +402,7 @@ void getoption_cmd(istringstream& is)
 	for (auto& o : Options)
 	{
 		// 大文字、小文字を無視して比較。また、nameが指定されていなければすべてのオプション設定の現在の値を表示。
-		if ((!stricmp(name, o.first)) || all)
+		if ((!StringExtension::stricmp(name, o.first)) || all)
 		{
 			sync_cout << "Options[" << o.first << "] == " << (string)Options[o.first] << sync_endl;
 			if (!all)
@@ -499,20 +496,15 @@ void go_cmd(const Position& pos, istringstream& is , StateListPtr& states) {
 				limits.mate = stoi(token);
 		}
 
-		// performance test
+		// パフォーマンステスト(Stockfishにある、合法手N手で到達できる局面を求めるやつ)
+		// このあとposition～goコマンドを使うとパフォーマンステストモードに突入し、ここで設定した手数で到達できる局面数を求める
 		else if (token == "perft")     is >> limits.perft;
 
 		// 時間無制限。
 		else if (token == "infinite")  limits.infinite = 1;
 
 		// ponderモードでの思考。
-		else if (token == "ponder")
-		{
-			ponderMode = true;
-
-			// 試合開始後、一度でも"go ponder"が送られてきたら、それを記録しておく。
-			Threads.main()->received_go_ponder = true;
-		}
+		else if (token == "ponder")		ponderMode = true;
 	}
 
 	// goコマンド、デバッグ時に使うが、そのときに"go btime XXX wtime XXX byoyomi XXX"と毎回入力するのが面倒なので
@@ -619,7 +611,7 @@ void USI::loop(int argc, char* argv[])
 	{
 		if (cmds.size() == 0)
 		{
-			if (!getline(cin, cmd)) // 入力が来るかEOFがくるまでここで待機する。
+			if (!std::getline(cin, cmd)) // 入力が来るかEOFがくるまでここで待機する。
 				cmd = "quit";
 		} else {
 			// 積んであるコマンドがあるならそれを実行する。
@@ -733,9 +725,6 @@ void USI::loop(int argc, char* argv[])
 		// 指し手生成のテスト
 		else if (token == "s") generate_moves_cmd(pos);
 
-		// パフォーマンステスト(Stockfishにある、合法手N手で到達できる局面を求めるやつ)
-		else if (token == "perft") perft(pos, is);
-
 		// テストコマンド
 		else if (token == "test") test_cmd(pos, is);
 
@@ -779,7 +768,7 @@ void USI::loop(int argc, char* argv[])
 				for (auto& o : Options)
 				{
 					// 大文字、小文字を無視して比較。
-					if (!stricmp(token, o.first))
+					if (!StringExtension::stricmp(token, o.first))
 					{
 						Options[o.first] = value;
 						sync_cout << "Options[" << o.first << "] = " << value << sync_endl;

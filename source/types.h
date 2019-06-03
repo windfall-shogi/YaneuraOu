@@ -19,7 +19,7 @@
 #include <iostream>     // iostreamに対する<<使うので仕方ない
 #include <string>       // std::string使うので仕方ない
 #include <algorithm>    // std::max()を使うので仕方ない
-#include <climits>
+#include <climits>		// INT_MAXがこのheaderで必要なので仕方ない
 
 // --------------------
 //      手番
@@ -843,6 +843,9 @@ enum RepetitionState
 };
 
 constexpr bool is_ok(RepetitionState rs) { return REPETITION_NONE <= rs && rs < REPETITION_NB; }
+
+// RepetitionStateを文字列化する。PVの出力のときにUSI拡張として出力するのに用いる。
+extern std::string to_usi_string(RepetitionState rs);
 
 // RepetitionStateを文字列化して出力する。PVの出力のときにUSI拡張として出力するのに用いる。
 std::ostream& operator<<(std::ostream& os, RepetitionState rs);

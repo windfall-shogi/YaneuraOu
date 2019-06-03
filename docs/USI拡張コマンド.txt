@@ -87,6 +87,7 @@ USIプロトコルの独自拡張コマンド
 	MaxMovesToDraw      : 終局までの手数。256手ルールなら256と設定する。0なら無制限。
 
 	BookMoves		: 定跡を用いる手数(0=未使用)
+					例えば16を指定した場合、開始局面から16手目の局面まで定跡にヒットする。
 
 	PvInterval      : PVの出力を抑制する。前回出力時間から、この時間(単位は[ms])経過するまでは次のPVを出力しない。
 
@@ -148,6 +149,8 @@ USIプロトコルの独自拡張コマンド
 				このとき、ConsiderBookMoveCount = true , BookEvalDiff = 0 , BookMoves = 0  BookDepthLimit = 0 ,
 				BookEvalBlackLimit = -99999 , BookEvalWhiteLimit = -99999 として扱われます。
 
+	IgnoreBookPly   : 定跡DB上の手数を無視する。
+			例) 局面図が同じであれば、定跡上の36手目の局面に40手目の局面でもヒットする。
 
 	nodestime      : node as timeモード。
 
@@ -236,6 +239,14 @@ USIプロトコルの独自拡張コマンド
 	とすると、今回の思考時間として、100～300[ms]を使って思考する。
 	自己対局でレーティングを計測するときに指し手をバラけさせる効果がある…と思って用意したが、
 	いまとなっては使っていない。
+
+	perft [depth] :パフォーマンステスト。現在の局面(positionコマンドで与えられる)から深さdepthまで
+		全合法手で進めるときの総node数を数えあげる。depthとして1以上の値を指定すること。
+		position～goコマンドと組み合わせて使う。
+		例)
+			perft 10
+			position startpos
+			go
 
 
 ■　USI拡張コマンド

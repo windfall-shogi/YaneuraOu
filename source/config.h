@@ -8,7 +8,7 @@
 
 // 思考エンジンのバージョンとしてUSIプロトコルの"usi"コマンドに応答するときの文字列。
 // ただし、この値を数値として使用することがあるので数値化できる文字列にしておく必要がある。
-#define ENGINE_VERSION "4.84"
+#define ENGINE_VERSION "4.86"
 
 // --------------------
 //  思考エンジンの種類
@@ -139,8 +139,6 @@
 // #define EVAL_PPET      // ×  技巧型 2駒+利き+手番(実装予定なし)
 // #define EVAL_KKPPT     // ○  KKPP型 4駒関係 手番あり。(55将棋、56将棋でも使えそう)※3
 // #define EVAL_KKPP_KKPT // ○  KKPP型 4駒関係 手番はKK,KKPTにのみあり。※3
-// #define EVAL_NABLA     // ○  ∇(ナブラ) 評価関数(現状、非公開)
-// #define EVAL_HELICES   // ？  螺旋評価関数
 
 // ※1 : KPP_PPTは、差分計算が面倒で割に合わないことが判明したのでこれを使うぐらいならKPP_KKPTで十分だという結論。
 // ※2 : 実装したけどいまひとつだったので差分計算実装せず。そのため遅すぎて、実質使い物にならない。ソースコードの参考用。
@@ -256,35 +254,26 @@
 
 // --- 通常の思考エンジンとして実行ファイルを公開するとき用の設定集
 
-// やねうら王2018 with お多福ラボ
-#if defined(YANEURAOU_2018_OTAFUKU_ENGINE) || defined(YANEURAOU_2018_OTAFUKU_ENGINE_KPPT) || defined(YANEURAOU_2018_OTAFUKU_ENGINE_KPP_KKPT) || defined(YANEURAOU_2018_OTAFUKU_ENGINE_MATERIAL)
-#define ENGINE_NAME "YaneuraOu 2018 Otafuku"
-#if defined(YANEURAOU_2018_OTAFUKU_ENGINE)
-#define EVAL_KPPT
-//#define EVAL_KPP_KKPT
-#endif
-#if defined(YANEURAOU_2018_OTAFUKU_ENGINE_KPPT)
-#define EVAL_KPPT
-#endif
-#if defined(YANEURAOU_2018_OTAFUKU_ENGINE_KPP_KKPT)
-#define EVAL_KPP_KKPT
-#endif
-#if defined(YANEURAOU_2018_OTAFUKU_ENGINE_MATERIAL)
-#define EVAL_MATERIAL
-#endif
-#if !defined(YANEURAOU_2018_OTAFUKU_ENGINE)
-#define YANEURAOU_2018_OTAFUKU_ENGINE
-#endif
+#if defined(YANEURAOU_ENGINE_KPPT) || defined(YANEURAOU_ENGINE_KPP_KKPT) || defined(YANEURAOU_ENGINE_NNUE) || defined(YANEURAOU_ENGINE_MATERIAL)
 
-#if !defined(YANEURAOU_2018_OTAFUKU_ENGINE_MATERIAL)
+#define ENGINE_NAME "YaneuraOu"
+// 探索部は通常のやねうら王エンジンを用いる。
+#define YANEURAOU_ENGINE
+
+
 #define USE_EVAL_HASH
-#endif
 #define USE_SEE
 #define USE_MATE_1PLY
 #define USE_ENTERING_KING_WIN
 #define USE_TIME_MANAGEMENT
 #define KEEP_PIECE_IN_GENERATE_MOVES
 #define ONE_PLY_EQ_1
+
+// 評価関数を共用して複数プロセス立ち上げたときのメモリを節約。(いまのところWindows限定)
+#define USE_SHARED_MEMORY_IN_EVAL
+
+// 学習機能を有効にするオプション。
+#define EVAL_LEARN
 
 // デバッグ絡み
 //#define ASSERT_LV 3
@@ -293,17 +282,9 @@
 #define ENABLE_TEST_CMD
 // 学習絡みのオプション
 #define USE_SFEN_PACKER
-// 学習機能を有効にするオプション。
-#if !defined(YANEURAOU_2018_OTAFUKU_ENGINE_MATERIAL)
-#define EVAL_LEARN
-#endif
 
 // 定跡生成絡み
 #define ENABLE_MAKEBOOK_CMD
-// 評価関数を共用して複数プロセス立ち上げたときのメモリを節約。(いまのところWindows限定)
-#if !defined(YANEURAOU_2018_OTAFUKU_ENGINE_MATERIAL)
-#define USE_SHARED_MEMORY_IN_EVAL
-#endif
 
 // パラメーターの自動調整絡み
 #define USE_GAMEOVER_HANDLER
@@ -311,54 +292,45 @@
 
 // GlobalOptionsは有効にしておく。
 #define USE_GLOBAL_OPTIONS
+
+// -- 各評価関数ごとのconfiguration
+
+#if defined(YANEURAOU_ENGINE_MATERIAL)
+#define EVAL_MATERIAL
+// 駒割のみの評価関数ではサポートされていない機能をundefする。
+#undef USE_EVAL_HASH
+#undef EVAL_LEARN
+#undef USE_SHARED_MEMORY_IN_EVAL
 #endif
 
-// NNUE評価関数を積んだtanuki-エンジン
-#if defined(YANEURAOU_2018_TNK_ENGINE)
-#define ENGINE_NAME "YaneuraOu 2018 T.N.K."
+#if defined(YANEURAOU_ENGINE_KPPT)
+#define EVAL_KPPT
+#endif
+
+#if defined(YANEURAOU_ENGINE_KPP_KKPT)
+#define EVAL_KPP_KKPT
+#endif
+
+#if defined(YANEURAOU_ENGINE_NNUE)
 #define EVAL_NNUE
-
-#define USE_EVAL_HASH
-#define USE_SEE
-#define USE_MATE_1PLY
-#define USE_ENTERING_KING_WIN
-#define USE_TIME_MANAGEMENT
-#define KEEP_PIECE_IN_GENERATE_MOVES
-#define ONE_PLY_EQ_1
-
-// デバッグ絡み
-//#define ASSERT_LV 3
-//#define USE_DEBUG_ASSERT
-
-#define ENABLE_TEST_CMD
-// 学習絡みのオプション
-#define USE_SFEN_PACKER
-// 学習機能を有効にするオプション。
-#define EVAL_LEARN
+// 現状、評価関数のメモリ共有はNNUEではサポートされていない。
+#undef USE_SHARED_MEMORY_IN_EVAL
 
 // 学習のためにOpenBLASを使う
 // "../openblas/lib/libopenblas.dll.a"をlibとして追加すること。
 //#define USE_BLAS
 
-
-// 定跡生成絡み
-#define ENABLE_MAKEBOOK_CMD
-// 評価関数を共用して複数プロセス立ち上げたときのメモリを節約。(いまのところWindows限定)
-//#define USE_SHARED_MEMORY_IN_EVAL
-// パラメーターの自動調整絡み
-#define USE_GAMEOVER_HANDLER
-//#define LONG_EFFECT_LIBRARY
-
-// GlobalOptionsは有効にしておく。
-#define USE_GLOBAL_OPTIONS
-
-// 探索部はYANEURAOU_2018_OTAFUKU_ENGINEを使う。
-#define YANEURAOU_2018_OTAFUKU_ENGINE
+// KP256を用いる場合これをdefineする。
+// ※　これをdefineしていなければNNUE標準のhalfKP256になる。
+// #define EVAL_NNUE_KP256
 #endif
+
+#endif // defined(YANEURAOU_ENGINE_KPPT) || ...
+
 
 // --- 詰将棋エンジンとして実行ファイルを公開するとき用の設定集
 
-#ifdef MATE_ENGINE
+#if defined(MATE_ENGINE)
 #define ENGINE_NAME "YaneuraOu mate solver"
 #define KEEP_LAST_MOVE
 #undef  MAX_PLY_NUM
@@ -366,14 +338,14 @@
 #define USE_SEE
 #define USE_MATE_1PLY
 #define EVAL_MATERIAL
-#define LONG_EFFECT_LIBRARY
+//#define LONG_EFFECT_LIBRARY
 #define USE_KEY_AFTER
 #define ENABLE_TEST_CMD
 #endif
 
 // --- ユーザーの自作エンジンとして実行ファイルを公開するとき用の設定集
 
-#ifdef USER_ENGINE
+#if defined(USER_ENGINE)
 #define ENGINE_NAME "YaneuraOu user engine"
 #define EVAL_KPP
 #endif
@@ -418,24 +390,9 @@ struct GlobalOptions_
 	// (無効化するとTT.probe()が必ずmiss hitするようになる)
 	bool use_hash_probe;
 
-	// スレッドごとに置換表を用意する設定
-	// Learner::search(),Leaner::qsearch()を呼ぶときにスレッドごとに置換表が用意されていないと嫌ならこれを呼び出す。
-	// この機能を有効にした場合、TT.new_search()を呼び出したときのOptions["Threads"]の値に従って、
-	// 置換表を分割するのでLearner::search()を呼ぶまでに事前にTT.new_search()を呼び出すこと。
-	bool use_per_thread_tt;
-
-	// 置換表とTTEntryの世代が異なるなら、値(TTEntry.value)は信用できないと仮定するフラグ。
-	// TT.probe()のときに、TTEntryとTT.generationとが厳密に一致しない場合は、
-	// 置換表にhitしても、そのTTEntryはVALUE_NONEを返す。
-	// こうすることで、hash衝突しておかしな値が書き込まれていてもそれを回避できる。
-	// gensfenコマンドでこの機能が必要だった。
-	// cf. http://yaneuraou.yaneu.com/2017/06/30/%E3%80%90%E8%A7%A3%E6%B1%BA%E3%80%91gensfen%E3%81%A7%E6%95%99%E5%B8%AB%E5%B1%80%E9%9D%A2%E7%94%9F%E6%88%90%E6%99%82%E3%81%AB%E9%81%85%E3%81%8F%E3%81%AA%E3%82%8B%E5%95%8F%E9%A1%8C/
-	bool use_strict_generational_tt;
-
 	GlobalOptions_()
 	{
 		use_eval_hash = use_hash_probe = true;
-		use_per_thread_tt = use_strict_generational_tt = false;
 	}
 };
 
@@ -608,7 +565,9 @@ constexpr bool Is64Bit = false;
 #define EVAL_TYPE_NAME "KPPT"
 #elif defined(EVAL_KPP_KKPT)
 #define EVAL_TYPE_NAME "KPP_KKPT"
-#elif defined(EVAL_NNUE)
+#elif defined(EVAL_NNUE_KP256)
+#define EVAL_TYPE_NAME "NNUE KP256"
+#elif defined(EVAL_NNUE) // 標準NNUE halfKP256
 #define EVAL_TYPE_NAME "NNUE"
 #else
 #define EVAL_TYPE_NAME ""
