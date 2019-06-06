@@ -11,7 +11,12 @@
 #include "../layers/affine_transform.h"
 #include "trainer.h"
 
+#include <array>
 #include <random>
+
+#include <boost/range/algorithm/fill.hpp>
+#include <boost/range/algorithm/transform.hpp>
+#include <boost/range/algorithm_ext/for_each.hpp>
 
 namespace Eval {
 
@@ -83,6 +88,9 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
     if (output_.size() < kOutputDimensions * batch.size()) {
       output_.resize(kOutputDimensions * batch.size());
       gradients_.resize(kInputDimensions * batch.size());
+#if defined(ADAM_UPDATE)
+      gradients2_.resize(gradients_.size());
+#endif
     }
     batch_size_ = static_cast<IndexType>(batch.size());
     batch_input_ = previous_layer_trainer_->Propagate(batch);
@@ -126,6 +134,87 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
                 gradients, kOutputDimensions,
                 0.0, &gradients_[0], kInputDimensions);
     // update
+#if defined(ADAM_UPDATE)
+    if (one_.size() < batch_size_) {
+      one_.resize(batch_size_);
+      boost::fill(one_, 1);
+    }
+
+    // biases_m = beta1 * biases_m + (1 - beta1) * grad
+    cblas_sgemv(CblasColMajor, CblasNoTrans, kOutputDimensions, batch_size_,
+                1 - beta1_, gradients, kOutputDimensions, one_.data(), 1,
+                beta1_, biases_m_.data(), 1);
+    // weights_m = beta1 * weights_m + (1 - beta1) * grad
+    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans, kOutputDimensions,
+                kInputDimensions, batch_size_, 1 - beta1_, gradients,
+                kOutputDimensions, batch_input_, kInputDimensions, beta1_,
+                weights_m_.data(), kInputDimensions);
+    // todo: use ipp
+    std::transform(gradients, gradients + kOutputDimensions * batch_size_,
+                   gradients2_.data(),
+                   [](const LearnFloatType v) { return powf(v, 2); });
+
+    // biases_v = beta2 * biases_v + (1 - beta2) * grad^2
+    cblas_sgemv(CblasColMajor, CblasNoTrans, biases_v_.size(), batch_size_,
+                1 - beta2_, gradients, biases_v_.size(), one_.data(), 1,
+                beta2_, biases_v_.data(), 1);
+    // weights_v = beta2 * weights_v + (1 - beta2) * grad^2
+    cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans, kOutputDimensions,
+                kInputDimensions, batch_size_, 1 - beta2_, gradients,
+                kOutputDimensions, batch_input_, kInputDimensions, beta2_,
+                weights_v_.data(), kInputDimensions);
+
+#if defined(USE_MKL)
+    // biases_m_hat = biases_m / (1 - beta1^t)
+    cblas_scopy(biases_m_.size(), biases_m_.data(), 1, biases_m_hat_.data(), 1);
+    cblas_sscal(biases_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
+                biases_m_hat_.data(), 1);
+    // biases_v_hat = biases_v / (1 - beta2^t)
+    cblas_scopy(biases_v_.size(), biases_v_.data(), 1, biases_v_hat_.data(), 1);
+    cblas_sscal(biases_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
+                biases_v_hat_.data(), 1);
+
+    // weights_m_hat = weights_m / (1 - beta1^t)
+    cblas_scopy(weights_m_.size(), weights_m_.data(), 1, weights_m_hat_.data(), 1);
+    cblas_sscal(weights_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
+                weights_m_hat_.data(), 1);
+    // weights_v_hat = weights_v / (1 - beta2^t)
+    cblas_scopy(weights_v_.size(), weights_v_.data(), 1, weights_v_hat_.data(), 1);
+    cblas_sscal(weights_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
+                weights_v_hat_.data(), 1);
+#else
+    // biases_m_hat = biases_m / (1 - beta1^t)
+    cblas_saxpby(biases_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
+                 biases_m_.data(), 1, 0, biases_m_hat_.data(), 1);
+    // biases_v_hat = biases_v / (1 - beta2^t)
+    cblas_saxpby(biases_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
+                 biases_v_.data(), 1, 0, biases_v_hat_.data(), 1);
+
+    // weights_m_hat = weights_m / (1 - beta1^t)
+    cblas_saxpby(weights_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
+                 weights_m_.data(), 1, 0, weights_m_hat_.data(), 1);
+    // weights_v_hat = weights_v / (1 - beta2^t)
+    cblas_saxpby(weights_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
+                 weights_v_.data(), 1, 0, weights_v_hat_.data(), 1);
+#endif  // defined(USE_MKL)
+    ++t_;
+
+    // todo: use ipp
+    // m_hat / (sqrt(v_hat) + epsilon)
+    boost::for_each(biases_v_hat_, biases_m_hat_,
+                    [&](const LearnFloatType v, LearnFloatType& m) {
+                      m /= sqrtf(v) + epsilon_;
+                    });
+    boost::for_each(weights_v_hat_, weights_m_hat_,
+                    [&](const LearnFloatType v, LearnFloatType& m) {
+                      m /= sqrtf(v) + epsilon_;
+                    });
+
+    cblas_saxpy(biases_m_hat_.size(), -local_learning_rate,
+                biases_m_hat_.data(), 1, biases_, 1);
+    cblas_saxpy(weights_m_hat_.size(), -local_learning_rate,
+                weights_m_hat_.data(), 1, weights_, 1);
+#else
     cblas_sscal(kOutputDimensions, momentum_, biases_diff_, 1);
     for (IndexType b = 0; b < batch_size_; ++b) {
       const IndexType batch_offset = kOutputDimensions * b;
@@ -141,6 +230,7 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
                 momentum_, weights_diff_, kInputDimensions);
     cblas_saxpy(kOutputDimensions * kInputDimensions, -local_learning_rate,
                 weights_diff_, 1, weights_, 1);
+#endif // defined(ADAM_UPDATE)
 #else
     // backpropagate
     for (IndexType b = 0; b < batch_size_; ++b) {
@@ -198,6 +288,16 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
       weights_(),
       biases_diff_(),
       weights_diff_(),
+#if defined(ADAM_UPDATE)
+      biases_m_(),
+      biases_v_(),
+      weights_m_(),
+      weights_v_(),
+      beta1_(0.9f),
+      beta2_(0.999f),
+      epsilon_(1e-8f),
+      t_(1),
+#endif // defined(ADAM_UPDATE)
       momentum_(0.0),
       learning_rate_scale_(1.0) {
     DequantizeParameters();
@@ -280,6 +380,13 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
   LearnFloatType weights_[kOutputDimensions * kInputDimensions];
 
   // パラメータの更新で用いるバッファ
+#if defined(ADAM_UPDATE)
+  std::array<LearnFloatType, kOutputDimensions> biases_m_, biases_v_, biases_m_hat_, biases_v_hat_;
+  std::array<LearnFloatType, kOutputDimensions * kInputDimensions> weights_m_, weights_v_, weights_m_hat_, weights_v_hat_;
+  std::vector<LearnFloatType> one_;
+  std::vector<LearnFloatType> gradients2_;
+  uint64_t t_;
+#endif
   LearnFloatType biases_diff_[kOutputDimensions];
   LearnFloatType weights_diff_[kOutputDimensions * kInputDimensions];
 
@@ -292,6 +399,10 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
   // ハイパーパラメータ
   LearnFloatType momentum_;
   LearnFloatType learning_rate_scale_;
+#if defined(ADAM_UPDATE)
+  LearnFloatType beta1_, beta2_;
+  LearnFloatType epsilon_;
+#endif
 };
 
 }  // namespace NNUE
