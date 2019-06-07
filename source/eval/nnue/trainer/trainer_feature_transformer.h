@@ -118,6 +118,25 @@ class Trainer<FeatureTransformer> {
       }
     }
     // clipped ReLU
+#if defined(USE_IPP)
+    // pre-activation metrics
+    ippsMinMax_32f(output_.data(), kOutputDimensions * batch.size(),
+                   &min_pre_activation_, &max_pre_activation_);
+    // activation
+    const IppiSize roi = {kOutputDimensions, batch.size()};
+    ippiThreshold_LTValGTVal_32f_C1IR(output_.data(), sizeof(LearnFloatType),
+                                      roi, kZero, kZero, kOne, kOne);
+    // post-activation metrics
+    ippsSet_32f(kOne, min_activations_, kHalfDimensions);
+    ippsSet_32f(kZero, max_activations_, kHalfDimensions);
+    for (IndexType i = 0; i < batch.size() * 2; ++i) {
+      const IndexType offset = i * kHalfDimensions;
+      ippsMinEvery_32f_I(output_.data() + offset, min_activations_,
+                         kHalfDimensions);
+      ippsMaxEvery_32f_I(output_.data() + offset, max_activations_,
+                         kHalfDimensions);
+    }
+#else
     for (IndexType b = 0; b < batch.size(); ++b) {
       const IndexType batch_offset = kOutputDimensions * b;
       for (IndexType i = 0; i < kOutputDimensions; ++i) {
@@ -130,6 +149,7 @@ class Trainer<FeatureTransformer> {
         max_activations_[t] = std::max(max_activations_[t], output_[index]);
       }
     }
+#endif
     return output_.data();
   }
 
