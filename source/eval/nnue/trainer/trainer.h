@@ -18,6 +18,9 @@ static_assert(std::is_same<LearnFloatType, float>::value, "");
 #else
 #include <cblas.h>
 #endif
+#if defined(USE_IPP)
+#include "ipp.h"
+#endif
 #endif
 
 namespace Eval {

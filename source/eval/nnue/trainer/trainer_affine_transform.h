@@ -149,10 +149,14 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
                 kInputDimensions, batch_size_, 1 - beta1_, gradients,
                 kOutputDimensions, batch_input_, kInputDimensions, beta1_,
                 weights_m_.data(), kInputDimensions);
-    // todo: use ipp
+
+#if defined(USE_IPP)
+    ippsSqr_32f(gradients, gradients2_.data(), kOutputDimensions * batch_size_);
+#else
     std::transform(gradients, gradients + kOutputDimensions * batch_size_,
                    gradients2_.data(),
                    [](const LearnFloatType v) { return powf(v, 2); });
+#endif
 
     // biases_v = beta2 * biases_v + (1 - beta2) * grad^2
     cblas_sgemv(CblasColMajor, CblasNoTrans, biases_v_.size(), batch_size_,
@@ -166,24 +170,6 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
 
 #if defined(USE_MKL)
     // biases_m_hat = biases_m / (1 - beta1^t)
-    cblas_scopy(biases_m_.size(), biases_m_.data(), 1, biases_m_hat_.data(), 1);
-    cblas_sscal(biases_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
-                biases_m_hat_.data(), 1);
-    // biases_v_hat = biases_v / (1 - beta2^t)
-    cblas_scopy(biases_v_.size(), biases_v_.data(), 1, biases_v_hat_.data(), 1);
-    cblas_sscal(biases_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
-                biases_v_hat_.data(), 1);
-
-    // weights_m_hat = weights_m / (1 - beta1^t)
-    cblas_scopy(weights_m_.size(), weights_m_.data(), 1, weights_m_hat_.data(), 1);
-    cblas_sscal(weights_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
-                weights_m_hat_.data(), 1);
-    // weights_v_hat = weights_v / (1 - beta2^t)
-    cblas_scopy(weights_v_.size(), weights_v_.data(), 1, weights_v_hat_.data(), 1);
-    cblas_sscal(weights_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
-                weights_v_hat_.data(), 1);
-#else
-    // biases_m_hat = biases_m / (1 - beta1^t)
     cblas_saxpby(biases_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
                  biases_m_.data(), 1, 0, biases_m_hat_.data(), 1);
     // biases_v_hat = biases_v / (1 - beta2^t)
@@ -196,10 +182,44 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
     // weights_v_hat = weights_v / (1 - beta2^t)
     cblas_saxpby(weights_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
                  weights_v_.data(), 1, 0, weights_v_hat_.data(), 1);
+#else
+    // biases_m_hat = biases_m / (1 - beta1^t)
+    cblas_scopy(biases_m_.size(), biases_m_.data(), 1, biases_m_hat_.data(), 1);
+    cblas_sscal(biases_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
+                biases_m_hat_.data(), 1);
+    // biases_v_hat = biases_v / (1 - beta2^t)
+    cblas_scopy(biases_v_.size(), biases_v_.data(), 1, biases_v_hat_.data(), 1);
+    cblas_sscal(biases_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
+                biases_v_hat_.data(), 1);
+
+    // weights_m_hat = weights_m / (1 - beta1^t)
+    cblas_scopy(weights_m_.size(), weights_m_.data(), 1, weights_m_hat_.data(),
+                1);
+    cblas_sscal(weights_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
+                weights_m_hat_.data(), 1);
+    // weights_v_hat = weights_v / (1 - beta2^t)
+    cblas_scopy(weights_v_.size(), weights_v_.data(), 1, weights_v_hat_.data(),
+                1);
+    cblas_sscal(weights_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
+                weights_v_hat_.data(), 1);
 #endif  // defined(USE_MKL)
     ++t_;
 
-    // todo: use ipp
+#if defined(USE_IPP)
+    // sqrt(in-place)
+    ippsSqrt_32f_I(biases_v_hat_.data(), biases_v_hat_.size());
+    ippsSqrt_32f_I(weights_v_hat_.data(), weights_v_hat_.size());
+
+    // +epsilon(in-place)
+    ippsAddC_32f_I(epsilon_, biases_v_hat_.data(), biases_v_hat_.size());
+    ippsAddC_32f_I(epsilon_, weights_v_hat_.data(), weights_v_hat_.size());
+
+    // m_hat = m_hat / v_hat
+    ippsDiv_32f_I(biases_v_hat_.data(), biases_m_hat_.data(),
+                  biases_v_hat_.size());
+    ippsDiv_32f_I(weights_v_hat_.data(), weights_m_hat_.data(),
+                  weights_v_hat_.size());
+#else
     // m_hat / (sqrt(v_hat) + epsilon)
     boost::for_each(biases_v_hat_, biases_m_hat_,
                     [&](const LearnFloatType v, LearnFloatType& m) {
@@ -209,6 +229,7 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
                     [&](const LearnFloatType v, LearnFloatType& m) {
                       m /= sqrtf(v) + epsilon_;
                     });
+#endif  // defined(USE_IPP)
 
     cblas_saxpy(biases_m_hat_.size(), -local_learning_rate,
                 biases_m_hat_.data(), 1, biases_, 1);
