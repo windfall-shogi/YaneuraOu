@@ -132,9 +132,9 @@ class Trainer<FeatureTransformer> {
     ippsMinMax_32f(output_.data(), kOutputDimensions * batch.size(),
                    &min_pre_activation_, &max_pre_activation_);
     // activation
-    const IppiSize roi = {kOutputDimensions, batch.size()};
-    ippiThreshold_LTValGTVal_32f_C1IR(output_.data(), sizeof(LearnFloatType),
-                                      roi, kZero, kZero, kOne, kOne);
+    ippsThreshold_LTValGTVal_32f_I(output_.data(),
+                                   kOutputDimensions * batch.size(), kZero,
+                                   kZero, kOne, kOne);
     // post-activation metrics
     ippsSet_32f(kOne, min_activations_, kHalfDimensions);
     ippsSet_32f(kZero, max_activations_, kHalfDimensions);
