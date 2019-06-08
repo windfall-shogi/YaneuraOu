@@ -167,6 +167,12 @@ class Trainer<FeatureTransformer> {
                      LearnFloatType learning_rate) {
     const LearnFloatType local_learning_rate =
         learning_rate * learning_rate_scale_;
+#if defined(USE_IPP)
+    boost::transform(output_, gradients_.begin(), [&](const LearnFloatType v) {
+      return (v < kZero || v > kOne) ? 0 : 1;
+    });
+    ippsMul_32f_I(gradients, gradients_.data(), gradients_.size());
+#else
     for (IndexType b = 0; b < batch_->size(); ++b) {
       const IndexType batch_offset = kOutputDimensions * b;
       for (IndexType i = 0; i < kOutputDimensions; ++i) {
@@ -175,6 +181,8 @@ class Trainer<FeatureTransformer> {
             ((output_[index] > kZero) * (output_[index] < kOne));
       }
     }
+#endif  // defined(USE_IPP)
+
 #if defined(USE_BLAS)
 #if defined(ADAM_UPDATE)
     if (one_.size() < batch_->size()) {
