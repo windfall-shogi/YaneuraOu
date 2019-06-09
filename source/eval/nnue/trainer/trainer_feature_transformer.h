@@ -146,6 +146,135 @@ class Trainer<FeatureTransformer> {
             ((output_[index] > kZero) * (output_[index] < kOne));
       }
     }
+#endif  // defined(USE_IPP)
+
+#if defined(USE_BLAS)
+#if defined(ADAM_UPDATE)
+    if (one_.size() < batch_->size()) {
+      one_.resize(batch_->size());
+      boost::fill(one_, 1);
+    }
+
+    // square of gradients
+#if defined(USE_IPP)
+    ippsSqr_32f(gradients, gradients2_.data(),
+                kOutputDimensions * batch_->size());
+#else
+    std::transform(gradients, gradients + kOutputDimensions * batch_->size(),
+                   gradients2_.data(),
+                   [](const LearnFloatType v) { return powf(v, 2); });
+#endif
+
+    // biases_m = beta1 * biases_m + (1 - beta1) * grad
+    cblas_sgemv(CblasColMajor, CblasNoTrans, kOutputDimensions, batch_->size(),
+                1 - beta1_, gradients_.data(), kOutputDimensions, one_.data(),
+                1, beta1_, biases_m_.data(), 1);
+
+    // biases_v = beta2 * biases_v + (1 - beta2) * grad^2
+    cblas_sgemv(CblasColMajor, CblasNoTrans, biases_v_.size(), batch_->size(),
+                1 - beta2_, gradients2_.data(), biases_v_.size(), one_.data(),
+                1, beta2_, biases_v_.data(), 1);
+
+    // beta1 * weights_m
+    cblas_sscal(weights_m_.size(), beta1_, weights_m_.data(), 1);
+    // beta2 * weights_v
+    cblas_sscal(weights_v_.size(), beta2_, weights_v_.data(), 1);
+#pragma omp parallel
+    {
+#if defined(_OPENMP)
+      const IndexType num_threads = omp_get_num_threads();
+      const IndexType thread_index = omp_get_thread_num();
+#endif
+      for (IndexType b = 0; b < batch_->size(); ++b) {
+        const IndexType batch_offset = kOutputDimensions * b;
+        for (IndexType c = 0; c < 2; ++c) {
+          const IndexType output_offset = batch_offset + kHalfDimensions * c;
+          for (const auto& feature : (*batch_)[b].training_features[c]) {
+#if defined(_OPENMP)
+            if (feature.GetIndex() % num_threads != thread_index) continue;
+#endif
+            const IndexType weights_offset =
+                kHalfDimensions * feature.GetIndex();
+            // (1 - beta1) * grad
+            cblas_saxpy(kHalfDimensions, 1 - beta1_, &gradients_[output_offset],
+                        1, &weights_m_[weights_offset], 1);
+            // (1 - beta2) * grad^2
+            cblas_saxpy(kHalfDimensions, 1 - beta2_,
+                        &gradients2_[output_offset], 1,
+                        &weights_v_[weights_offset], 1);
+          }
+        }
+      }
+    }
+
+#if defined(USE_MKL)
+    // biases_m_hat = biases_m / (1 - beta1^t)
+    cblas_saxpby(biases_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
+                 biases_m_.data(), 1, 0, biases_m_hat_.data(), 1);
+    // biases_v_hat = biases_v / (1 - beta2^t)
+    cblas_saxpby(biases_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
+                 biases_v_.data(), 1, 0, biases_v_hat_.data(), 1);
+
+    // weights_m_hat = weights_m / (1 - beta1^t)
+    cblas_saxpby(weights_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
+                 weights_m_.data(), 1, 0, weights_m_hat_.data(), 1);
+    // weights_v_hat = weights_v / (1 - beta2^t)
+    cblas_saxpby(weights_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
+                 weights_v_.data(), 1, 0, weights_v_hat_.data(), 1);
+#else
+    // biases_m_hat = biases_m / (1 - beta1^t)
+    cblas_scopy(biases_m_.size(), biases_m_.data(), 1, biases_m_hat_.data(), 1);
+    cblas_sscal(biases_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
+                biases_m_hat_.data(), 1);
+    // biases_v_hat = biases_v / (1 - beta2^t)
+    cblas_scopy(biases_v_.size(), biases_v_.data(), 1, biases_v_hat_.data(), 1);
+    cblas_sscal(biases_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
+                biases_v_hat_.data(), 1);
+
+    // weights_m_hat = weights_m / (1 - beta1^t)
+    cblas_scopy(weights_m_.size(), weights_m_.data(), 1, weights_m_hat_.data(),
+                1);
+    cblas_sscal(weights_m_hat_.size(), 1 / (1 - powf(beta1_, t_)),
+                weights_m_hat_.data(), 1);
+    // weights_v_hat = weights_v / (1 - beta2^t)
+    cblas_scopy(weights_v_.size(), weights_v_.data(), 1, weights_v_hat_.data(),
+                1);
+    cblas_sscal(weights_v_hat_.size(), 1 / (1 - powf(beta2_, t_)),
+                weights_v_hat_.data(), 1);
+#endif  // defined(USE_MKL)
+    ++t_;
+
+#if defined(USE_IPP)
+    // sqrt(in-place)
+    ippsSqrt_32f_I(biases_v_hat_.data(), biases_v_hat_.size());
+    ippsSqrt_32f_I(weights_v_hat_.data(), weights_v_hat_.size());
+
+    // +epsilon(in-place)
+    ippsAddC_32f_I(epsilon_, biases_v_hat_.data(), biases_v_hat_.size());
+    ippsAddC_32f_I(epsilon_, weights_v_hat_.data(), weights_v_hat_.size());
+
+    // m_hat = m_hat / v_hat
+    ippsDiv_32f_I(biases_v_hat_.data(), biases_m_hat_.data(),
+                  biases_v_hat_.size());
+    ippsDiv_32f_I(weights_v_hat_.data(), weights_m_hat_.data(),
+                  weights_v_hat_.size());
+#else
+    // m_hat / (sqrt(v_hat) + epsilon)
+    boost::for_each(biases_v_hat_, biases_m_hat_,
+                    [&](const LearnFloatType v, LearnFloatType& m) {
+                      m /= sqrtf(v) + epsilon_;
+                    });
+    boost::for_each(weights_v_hat_, weights_m_hat_,
+                    [&](const LearnFloatType v, LearnFloatType& m) {
+                      m /= sqrtf(v) + epsilon_;
+                    });
+#endif  // defined(USE_IPP)
+    cblas_saxpy(biases_m_hat_.size(), -local_learning_rate,
+                biases_m_hat_.data(), 1, biases_, 1);
+    cblas_saxpy(weights_m_hat_.size(), -local_learning_rate,
+                weights_m_hat_.data(), 1, weights_, 1);
+
+#else
     // 重み行列は入力に出現した特徴量に対応する列のみを更新するため、
     // momentumを使用せず、学習率を補正してスケールを合わせる
     const LearnFloatType effective_learning_rate =
