@@ -202,13 +202,13 @@ class Trainer<FeatureTransformer> {
 
     // biases_m = beta1 * biases_m + (1 - beta1) * grad
     cblas_sgemv(CblasColMajor, CblasNoTrans, kOutputDimensions, batch_->size(),
-                1 - beta1_, gradients, kOutputDimensions, one_.data(), 1,
-                beta1_, biases_m_.data(), 1);
+                1 - beta1_, gradients_.data(), kOutputDimensions, one_.data(),
+                1, beta1_, biases_m_.data(), 1);
 
     // biases_v = beta2 * biases_v + (1 - beta2) * grad^2
     cblas_sgemv(CblasColMajor, CblasNoTrans, biases_v_.size(), batch_->size(),
-                1 - beta2_, gradients, biases_v_.size(), one_.data(), 1, beta2_,
-                biases_v_.data(), 1);
+                1 - beta2_, gradients2_.data(), biases_v_.size(), one_.data(),
+                1, beta2_, biases_v_.data(), 1);
 
     // beta1 * weights_m
     cblas_sscal(weights_m_.size(), beta1_, weights_m_.data(), 1);

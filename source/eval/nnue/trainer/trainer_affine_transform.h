@@ -162,11 +162,11 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
 
     // biases_v = beta2 * biases_v + (1 - beta2) * grad^2
     cblas_sgemv(CblasColMajor, CblasNoTrans, biases_v_.size(), batch_size_,
-                1 - beta2_, gradients, biases_v_.size(), one_.data(), 1,
-                beta2_, biases_v_.data(), 1);
+                1 - beta2_, gradients2_.data(), biases_v_.size(), one_.data(),
+                1, beta2_, biases_v_.data(), 1);
     // weights_v = beta2 * weights_v + (1 - beta2) * grad^2
     cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans, kOutputDimensions,
-                kInputDimensions, batch_size_, 1 - beta2_, gradients,
+                kInputDimensions, batch_size_, 1 - beta2_, gradients2_.data(),
                 kOutputDimensions, batch_input_, kInputDimensions, beta2_,
                 weights_v_.data(), kInputDimensions);
 
