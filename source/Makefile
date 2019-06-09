@@ -15,7 +15,7 @@ YANEURAOU_EDITION = YANEURAOU_ENGINE_NNUE
 COMPILER = clang++
 
 # 標準的なコンパイルオプション
-CFLAGS   = -std=c++14 -fno-exceptions -Wextra -Ofast -MMD -MP -fpermissive -DUSE_TENSORBOARD
+CFLAGS   = -std=c++14 -fno-exceptions -Wextra -Ofast -MMD -MP -fpermissive
 WCFLAGS  =
 LDFLAGS  = -ltensorboard_logger -L../externals/tensorboard_logger -lprotobuf
 LIBS     =
@@ -89,8 +89,8 @@ ifeq ($(findstring clang++,$(COMPILER)),clang++)
 	OPENMP   = -fopenmp
 	OPENMP_LDFLAGS = -lomp
 	ifeq ($(YANEURAOU_EDITION),YANEURAOU_ENGINE_NNUE)
-		BLAS = -DUSE_BLAS
-		BLAS_LDFLAGS = -lmkl_core -lmkl_intel_lp64 -lmkl_def -lmkl_intel_thread 
+		BLAS = -DUSE_MKL -DUSE_IPP
+		BLAS_LDFLAGS = -lmkl_core -lmkl_intel_lp64 -lmkl_def -lmkl_intel_thread -lipps
 		ifeq ($(MSYSTEM),MINGW64)
 			BLAS += -I$(shell cygpath -aw /mingw64/include/OpenBLAS)
 		endif
