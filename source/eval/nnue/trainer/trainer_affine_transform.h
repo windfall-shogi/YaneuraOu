@@ -11,7 +11,12 @@
 #include "../layers/affine_transform.h"
 #include "trainer.h"
 
+#include <array>
 #include <random>
+
+#include <boost/range/algorithm/fill.hpp>
+#include <boost/range/algorithm/transform.hpp>
+#include <boost/range/algorithm_ext/for_each.hpp>
 
 namespace Eval {
 
@@ -35,9 +40,11 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
   // ハイパーパラメータなどのオプションを設定する
   void SendMessage(Message* message) {
     previous_layer_trainer_->SendMessage(message);
+#if !defined(ADAM_UPDATE)
     if (ReceiveMessage("momentum", message)) {
       momentum_ = static_cast<LearnFloatType>(std::stod(message->value));
     }
+#endif
     if (ReceiveMessage("learning_rate_scale", message)) {
       learning_rate_scale_ =
           static_cast<LearnFloatType>(std::stod(message->value));
@@ -83,10 +90,13 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
     if (output_.size() < kOutputDimensions * batch.size()) {
       output_.resize(kOutputDimensions * batch.size());
       gradients_.resize(kInputDimensions * batch.size());
+#if defined(ADAM_UPDATE)
+      gradients2_.resize(gradients_.size());
+#endif
     }
     batch_size_ = static_cast<IndexType>(batch.size());
     batch_input_ = previous_layer_trainer_->Propagate(batch);
-#if defined(USE_BLAS)
+#if defined(USE_BLAS) || defined(USE_MKL)
     for (IndexType b = 0; b < batch_size_; ++b) {
       const IndexType batch_offset = kOutputDimensions * b;
       cblas_scopy(kOutputDimensions, biases_, 1, &output_[batch_offset], 1);
@@ -118,7 +128,7 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
                      LearnFloatType learning_rate) {
     const LearnFloatType local_learning_rate =
         learning_rate * learning_rate_scale_;
-#if defined(USE_BLAS)
+#if defined(USE_BLAS) || defined(USE_MKL)
     // backpropagate
     cblas_sgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                 kInputDimensions, batch_size_, kOutputDimensions, 1.0,
@@ -243,6 +253,7 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
                 momentum_, weights_diff_, kInputDimensions);
     cblas_saxpy(kOutputDimensions * kInputDimensions, -local_learning_rate,
                 weights_diff_, 1, weights_, 1);
+#endif // defined(ADAM_UPDATE)
 #else
     // backpropagate
     for (IndexType b = 0; b < batch_size_; ++b) {
@@ -298,9 +309,20 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
       target_layer_(target_layer),
       biases_(),
       weights_(),
+#if defined(ADAM_UPDATE)
+      biases_m_(),
+      biases_v_(),
+      weights_m_(),
+      weights_v_(),
+      beta1_(0.9f),
+      beta2_(0.999f),
+      epsilon_(1e-8f),
+      t_(1),
+#else
       biases_diff_(),
       weights_diff_(),
       momentum_(0.0),
+#endif // defined(ADAM_UPDATE)
       learning_rate_scale_(1.0) {
     DequantizeParameters();
   }
@@ -340,10 +362,17 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
             target_layer_->weights_[padded_offset + j] / kWeightScale);
       }
     }
+#if defined(ADAM_UPDATE)
+    boost::fill(biases_m_, 0);
+    boost::fill(biases_v_, 0);
+    boost::fill(weights_m_, 0);
+    boost::fill(weights_v_, 0);
+#else
     std::fill(std::begin(biases_diff_), std::end(biases_diff_),
               static_cast<LearnFloatType>(0.0));
     std::fill(std::begin(weights_diff_), std::end(weights_diff_),
               static_cast<LearnFloatType>(0.0));
+#endif
   }
 
   // 入出力の次元数
@@ -382,8 +411,16 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
   LearnFloatType weights_[kOutputDimensions * kInputDimensions];
 
   // パラメータの更新で用いるバッファ
+#if defined(ADAM_UPDATE)
+  std::array<LearnFloatType, kOutputDimensions> biases_m_, biases_v_, biases_m_hat_, biases_v_hat_;
+  std::array<LearnFloatType, kOutputDimensions * kInputDimensions> weights_m_, weights_v_, weights_m_hat_, weights_v_hat_;
+  std::vector<LearnFloatType> one_;
+  std::vector<LearnFloatType> gradients2_;
+  uint64_t t_;
+#else
   LearnFloatType biases_diff_[kOutputDimensions];
   LearnFloatType weights_diff_[kOutputDimensions * kInputDimensions];
+#endif
 
   // 順伝播用バッファ
   std::vector<LearnFloatType> output_;
@@ -392,8 +429,13 @@ class Trainer<Layers::AffineTransform<PreviousLayer, OutputDimensions>> {
   std::vector<LearnFloatType> gradients_;
 
   // ハイパーパラメータ
-  LearnFloatType momentum_;
   LearnFloatType learning_rate_scale_;
+#if defined(ADAM_UPDATE)
+  LearnFloatType beta1_, beta2_;
+  LearnFloatType epsilon_;
+#else
+  LearnFloatType momentum_;
+#endif
 };
 
 }  // namespace NNUE

@@ -13,11 +13,13 @@
 #include <sstream>
 #if defined(USE_BLAS) || defined(USE_MKL)
 static_assert(std::is_same<LearnFloatType, float>::value, "");
-#if defined(USE_BLAS)
-#include <cblas.h>
-#endif
 #if defined(USE_MKL)
 #include "mkl.h"
+#else
+#include <cblas.h>
+#endif
+#if defined(USE_IPP)
+#include "ipp.h"
 #endif
 #endif
 

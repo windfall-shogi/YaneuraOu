@@ -18,6 +18,10 @@
 #include <random>
 #include <set>
 
+#include <boost/range/algorithm/fill.hpp>
+#include <boost/range/algorithm/transform.hpp>
+#include <boost/range/algorithm_ext/for_each.hpp>
+
 #if defined(_OPENMP)
 #include <omp.h>
 #endif
@@ -46,9 +50,11 @@ class Trainer<FeatureTransformer> {
 
   // ハイパーパラメータなどのオプションを設定する
   void SendMessage(Message* message) {
+#if !defined(ADAM_UPDATE)
     if (ReceiveMessage("momentum", message)) {
       momentum_ = static_cast<LearnFloatType>(std::stod(message->value));
     }
+#endif
     if (ReceiveMessage("learning_rate_scale", message)) {
       learning_rate_scale_ =
           static_cast<LearnFloatType>(std::stod(message->value));
@@ -88,6 +94,9 @@ class Trainer<FeatureTransformer> {
     if (output_.size() < kOutputDimensions * batch.size()) {
       output_.resize(kOutputDimensions * batch.size());
       gradients_.resize(kOutputDimensions * batch.size());
+#if defined(ADAM_UPDATE)
+      gradients2_.resize(gradients_.size());
+#endif
     }
     batch_ = &batch;
     // affine transform
@@ -118,6 +127,25 @@ class Trainer<FeatureTransformer> {
       }
     }
     // clipped ReLU
+#if defined(USE_IPP)
+    // pre-activation metrics
+    ippsMinMax_32f(output_.data(), kOutputDimensions * batch.size(),
+                   &min_pre_activation_, &max_pre_activation_);
+    // activation
+    ippsThreshold_LTValGTVal_32f_I(output_.data(),
+                                   kOutputDimensions * batch.size(), kZero,
+                                   kZero, kOne, kOne);
+    // post-activation metrics
+    ippsSet_32f(kOne, min_activations_, kHalfDimensions);
+    ippsSet_32f(kZero, max_activations_, kHalfDimensions);
+    for (IndexType i = 0; i < batch.size() * 2; ++i) {
+      const IndexType offset = i * kHalfDimensions;
+      ippsMinEvery_32f_I(output_.data() + offset, min_activations_,
+                         kHalfDimensions);
+      ippsMaxEvery_32f_I(output_.data() + offset, max_activations_,
+                         kHalfDimensions);
+    }
+#else
     for (IndexType b = 0; b < batch.size(); ++b) {
       const IndexType batch_offset = kOutputDimensions * b;
       for (IndexType i = 0; i < kOutputDimensions; ++i) {
@@ -130,6 +158,7 @@ class Trainer<FeatureTransformer> {
         max_activations_[t] = std::max(max_activations_[t], output_[index]);
       }
     }
+#endif
     return output_.data();
   }
 
@@ -138,6 +167,12 @@ class Trainer<FeatureTransformer> {
                      LearnFloatType learning_rate) {
     const LearnFloatType local_learning_rate =
         learning_rate * learning_rate_scale_;
+#if defined(USE_IPP)
+    boost::transform(output_, gradients_.begin(), [&](const LearnFloatType v) {
+      return (v < kZero || v > kOne) ? 0 : 1;
+    });
+    ippsMul_32f_I(gradients, gradients_.data(), gradients_.size());
+#else
     for (IndexType b = 0; b < batch_->size(); ++b) {
       const IndexType batch_offset = kOutputDimensions * b;
       for (IndexType i = 0; i < kOutputDimensions; ++i) {
@@ -148,7 +183,7 @@ class Trainer<FeatureTransformer> {
     }
 #endif  // defined(USE_IPP)
 
-#if defined(USE_BLAS)
+#if defined(USE_BLAS) || defined(USE_MKL)
 #if defined(ADAM_UPDATE)
     if (one_.size() < batch_->size()) {
       one_.resize(batch_->size());
@@ -279,7 +314,7 @@ class Trainer<FeatureTransformer> {
     // momentumを使用せず、学習率を補正してスケールを合わせる
     const LearnFloatType effective_learning_rate =
         static_cast<LearnFloatType>(local_learning_rate / (1.0 - momentum_));
-#if defined(USE_BLAS)
+
     cblas_sscal(kHalfDimensions, momentum_, biases_diff_, 1);
     for (IndexType b = 0; b < batch_->size(); ++b) {
       const IndexType batch_offset = kOutputDimensions * b;
@@ -316,6 +351,7 @@ class Trainer<FeatureTransformer> {
         }
       }
     }
+#endif  // defined(ADAM_UPDATE)
 #else
     for (IndexType i = 0; i < kHalfDimensions; ++i) {
       biases_diff_[i] *= momentum_;
@@ -364,8 +400,19 @@ class Trainer<FeatureTransformer> {
       target_layer_(target_layer),
       biases_(),
       weights_(),
+#if defined(ADAM_UPDATE)
+    biases_m_(),
+    biases_v_(),
+    weights_m_(),
+    weights_v_(),
+    beta1_(0.9f),
+    beta2_(0.999f),
+    epsilon_(1e-8f),
+    t_(1),
+#else
       biases_diff_(),
       momentum_(0.0),
+#endif
       learning_rate_scale_(1.0) {
     min_pre_activation_ = std::numeric_limits<LearnFloatType>::max();
     max_pre_activation_ = std::numeric_limits<LearnFloatType>::lowest();
@@ -410,7 +457,14 @@ class Trainer<FeatureTransformer> {
       weights_[i] = static_cast<LearnFloatType>(
           target_layer_->weights_[i] / kWeightScale);
     }
+#if defined(ADAM_UPDATE)
+    boost::fill(biases_m_, 0);
+    boost::fill(biases_v_, 0);
+    boost::fill(weights_m_, 0);
+    boost::fill(weights_v_, 0);
+#else
     std::fill(std::begin(biases_diff_), std::end(biases_diff_), +kZero);
+#endif
   }
 
   // 学習データに出現していない特徴量に対応する重みを0にする
@@ -479,7 +533,15 @@ class Trainer<FeatureTransformer> {
       LearnFloatType weights_[kHalfDimensions * kInputDimensions];
 
   // パラメータの更新で用いるバッファ
+#if defined(ADAM_UPDATE)
+  std::array<LearnFloatType, kHalfDimensions> biases_m_, biases_v_, biases_m_hat_, biases_v_hat_;
+  std::array<LearnFloatType, kHalfDimensions* kInputDimensions> weights_m_, weights_v_, weights_m_hat_, weights_v_hat_;
+  std::vector<LearnFloatType> one_;
+  std::vector<LearnFloatType> gradients2_;
+  uint64_t t_;
+#else
   LearnFloatType biases_diff_[kHalfDimensions];
+#endif
   std::vector<LearnFloatType> gradients_;
 
   // 順伝播用バッファ
@@ -489,8 +551,13 @@ class Trainer<FeatureTransformer> {
   std::bitset<kInputDimensions> observed_features;
 
   // ハイパーパラメータ
-  LearnFloatType momentum_;
   LearnFloatType learning_rate_scale_;
+#if defined(ADAM_UPDATE)
+  LearnFloatType beta1_, beta2_;
+  LearnFloatType epsilon_;
+#else
+  LearnFloatType momentum_;
+#endif
 
   // ヘルスチェック用統計値
   LearnFloatType min_pre_activation_;
