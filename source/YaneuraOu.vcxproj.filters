@@ -264,6 +264,9 @@
     <ClInclude Include="eval\evalhash.h">
       <Filter>リソース ファイル\eval</Filter>
     </ClInclude>
+    <ClInclude Include="eval\nnue\layers\binary_affine_transform.h">
+      <Filter>リソース ファイル\eval\nnue\layers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="movegen.cpp">
