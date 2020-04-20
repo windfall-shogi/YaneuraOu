@@ -407,6 +407,7 @@
     <ClInclude Include="eval\nnue\features\k.h" />
     <ClInclude Include="eval\nnue\features\p.h" />
     <ClInclude Include="eval\nnue\layers\affine_transform.h" />
+    <ClInclude Include="eval\nnue\layers\binarization.h" />
     <ClInclude Include="eval\nnue\layers\binary_affine_transform.h" />
     <ClInclude Include="eval\nnue\layers\clipped_relu.h" />
     <ClInclude Include="eval\nnue\layers\input_slice.h" />

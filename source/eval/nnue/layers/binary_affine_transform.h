@@ -95,7 +95,8 @@ public:
 
   // èáì`îd
   const OutputType* Propagate(
-    const TransformedFeatureType* transformed_features, char* buffer, std::int32_t *scale_buffer) const {
+      const TransformedFeatureType* transformed_features, char* buffer,
+      std::int32_t* scale_buffer) const {
     const auto input = previous_layer_.Propagate(
       transformed_features, buffer + kSelfBufferSize, scale_buffer);
     const auto output = reinterpret_cast<__m256i*>(buffer);
