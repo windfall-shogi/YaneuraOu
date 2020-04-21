@@ -411,6 +411,7 @@
     <ClInclude Include="eval\nnue\layers\binary_affine_transform.h" />
     <ClInclude Include="eval\nnue\layers\clipped_relu.h" />
     <ClInclude Include="eval\nnue\layers\input_slice.h" />
+    <ClInclude Include="eval\nnue\layers\leaky_relu.h" />
     <ClInclude Include="eval\nnue\layers\sum.h" />
     <ClInclude Include="eval\nnue\nnue_accumulator.h" />
     <ClInclude Include="eval\nnue\nnue_architecture.h" />
