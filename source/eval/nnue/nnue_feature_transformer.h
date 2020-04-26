@@ -26,6 +26,9 @@ class FeatureTransformer {
  public:
   // 出力の型
   using OutputType = TransformedFeatureType;
+  //! スケールの型
+  using ScaleType = int32_t;
+
 
   // 入出力の次元数
   static constexpr IndexType kInputDimensions = RawFeatures::kDimensions;
@@ -33,7 +36,11 @@ class FeatureTransformer {
 
   // 順伝播用バッファのサイズ
   static constexpr std::size_t kBufferSize =
-      kOutputDimensions * sizeof(OutputType);
+      kOutputDimensions * sizeof(OutputType) / 8;
+
+  //! スケール用バッファのインデックス
+  /*! 値を読み取る位置 */
+  static constexpr IndexType kScaleIndex = 0;
 
   // 評価関数ファイルに埋め込むハッシュ値
   static constexpr std::uint32_t GetHashValue() {
@@ -80,79 +87,106 @@ class FeatureTransformer {
   }
 
   // 入力特徴量を変換する
-  void Transform(const Position& pos, OutputType* output, bool refresh) const {
+  void Transform(const Position& pos, OutputType* output, int32_t* scale_buffer,
+                 bool refresh) const {
     if (refresh || !UpdateAccumulatorIfPossible(pos)) {
       RefreshAccumulator(pos);
     }
+
+    constexpr IndexType kNumChunks = kHalfDimensions / kSimdWidth;
+    // スケール用の合計
+    // 32bitのうちの下位13bit
+    __m256i sum_lo = _mm256_setzero_si256();
+    // スケール用の合計
+    // sum_loの担当より上のbit
+    __m256i sum_hi = _mm256_setzero_si256();
+    // 上位3bitのマスク
+    const __m256i sum_mask = _mm256_set1_epi16(0xE000);
+
     const auto& accumulation = pos.state()->accumulator.accumulation;
-#if defined(USE_AVX2)
-    constexpr IndexType kNumChunks = kHalfDimensions / kSimdWidth;
-    constexpr int kControl = 0b11011000;
-    const __m256i kZero = _mm256_setzero_si256();
-#elif defined(USE_SSE41)
-    constexpr IndexType kNumChunks = kHalfDimensions / kSimdWidth;
-    const __m128i kZero = _mm_setzero_si128();
-#elif defined(IS_ARM)
-    constexpr IndexType kNumChunks = kHalfDimensions / (kSimdWidth / 2);
-    const int8x8_t kZero = {0};
-#endif
     const Color perspectives[2] = {pos.side_to_move(), ~pos.side_to_move()};
     for (IndexType p = 0; p < 2; ++p) {
-      const IndexType offset = kHalfDimensions * p;
-#if defined(USE_AVX2)
-      auto out = reinterpret_cast<__m256i*>(&output[offset]);
+      const IndexType offset = kHalfDimensions * p / 8;
+
+      auto out = reinterpret_cast<int32_t*>(&output[offset]);
+
+      const auto ptr = accumulation[perspectives[p]];
+      __m256i mask = _mm256_set1_epi16(1);
       for (IndexType j = 0; j < kNumChunks; ++j) {
-        __m256i sum0 = _mm256_load_si256(&reinterpret_cast<const __m256i*>(
-            accumulation[perspectives[p]][0])[j * 2 + 0]);
-        __m256i sum1 = _mm256_load_si256(&reinterpret_cast<const __m256i*>(
-            accumulation[perspectives[p]][0])[j * 2 + 1]);
-        for (IndexType i = 1; i < kRefreshTriggers.size(); ++i) {
-          sum0 = _mm256_add_epi16(sum0, reinterpret_cast<const __m256i*>(
-              accumulation[perspectives[p]][i])[j * 2 + 0]);
-          sum1 = _mm256_add_epi16(sum1, reinterpret_cast<const __m256i*>(
-              accumulation[perspectives[p]][i])[j * 2 + 1]);
+        __m256i v1 = _mm256_load_si256(
+            &reinterpret_cast<const __m256i*>(ptr[0])[2 * j + 0]);
+        __m256i v2 = _mm256_load_si256(
+            &reinterpret_cast<const __m256i*>(ptr[0])[2 * j + 1]);
+        for (IndexType k = 1; k < kRefreshTriggers.size(); ++k) {
+          v1 = _mm256_add_epi16(
+              v1, _mm256_load_si256(
+                      &reinterpret_cast<const __m256i*>(ptr[k])[2 * j + 0]));
+          v2 = _mm256_add_epi16(
+              v2, _mm256_load_si256(
+                      &reinterpret_cast<const __m256i*>(ptr[k])[2 * j + 1]));
         }
-        _mm256_store_si256(&out[j], _mm256_permute4x64_epi64(_mm256_max_epi8(
-            _mm256_packs_epi16(sum0, sum1), kZero), kControl));
-      }
-#elif defined(USE_SSE41)
-      auto out = reinterpret_cast<__m128i*>(&output[offset]);
-      for (IndexType j = 0; j < kNumChunks; ++j) {
-        __m128i sum0 = _mm_load_si128(&reinterpret_cast<const __m128i*>(
-            accumulation[perspectives[p]][0])[j * 2 + 0]);
-        __m128i sum1 = _mm_load_si128(&reinterpret_cast<const __m128i*>(
-            accumulation[perspectives[p]][0])[j * 2 + 1]);
-        for (IndexType i = 1; i < kRefreshTriggers.size(); ++i) {
-          sum0 = _mm_add_epi16(sum0, reinterpret_cast<const __m128i*>(
-              accumulation[perspectives[p]][i])[j * 2 + 0]);
-          sum1 = _mm_add_epi16(sum1, reinterpret_cast<const __m128i*>(
-              accumulation[perspectives[p]][i])[j * 2 + 1]);
+        //
+        // 2値化
+        //
+        // 64bitずつ v1の前半, v2の前半, v1の後半, v2の後半となる
+        const __m256i packed = _mm256_packs_epi16(v1, v2);
+        // 各int8_tの最上位ビットを集める
+        // そのため正なら0、負なら1で2値化される
+        out[p * kNumChunks + j] = _mm256_movemask_epi8(packed);
+
+        //
+        // 入力ベクトルのスケールを計算
+        //
+        // 絶対値の合計
+        sum_lo = _mm256_adds_epi16(sum_lo, _mm256_abs_epi16(v1));
+        sum_lo = _mm256_adds_epi16(sum_lo, _mm256_abs_epi16(v2));
+        // ある程度の大きさの数値で毎回は計算しなくてもoverflowはない
+        if (j % 2) {
+          sum_hi = _mm256_adds_epi16(
+              sum_hi,
+              _mm256_slli_epi16(_mm256_and_si256(sum_lo, sum_mask), 13));
+          sum_lo = _mm256_andnot_si256(sum_mask, sum_lo);
         }
-        _mm_store_si128(&out[j], _mm_max_epi8(
-            _mm_packs_epi16(sum0, sum1), kZero));
       }
-#elif defined(IS_ARM)
-      const auto out = reinterpret_cast<int8x8_t*>(&output[offset]);
-      for (IndexType j = 0; j < kNumChunks; ++j) {
-        int16x8_t sum = reinterpret_cast<const int16x8_t*>(
-            accumulation[perspectives[p]][0])[j];
-        for (IndexType i = 1; i < kRefreshTriggers.size(); ++i) {
-          sum = vaddq_s16(sum, reinterpret_cast<const int16x8_t*>(
-              accumulation[perspectives[p]][i])[j]);
-        }
-        out[j] = vmax_s8(vqmovn_s16(sum), kZero);
-      }
-#else
-      for (IndexType j = 0; j < kHalfDimensions; ++j) {
-        BiasType sum = accumulation[perspectives[p]][0][j];
-        for (IndexType i = 1; i < kRefreshTriggers.size(); ++i) {
-          sum += accumulation[perspectives[p]][i][j];
-        }
-        output[offset + j] = static_cast<OutputType>(
-            std::max<int>(0, std::min<int>(127, sum)));
-      }
-#endif
     }
+    //
+    // 水平方向に合計
+    //
+    // loの前半とhiの前半
+    const __m256i a = _mm256_permute2x128_si256(sum_lo, sum_hi, 0x20);
+    // loの後半とhiの後半
+    const __m256i b = _mm256_permute2x128_si256(sum_lo, sum_hi, 0x31);
+    const __m256i c = _mm256_adds_epi16(a, b);  // 16bitの値が16個
+
+    // clang-format off
+    const __m256i order =
+      _mm256_set_epi8(0xF, 0x7, 0xD, 0x5, 0xB, 0x3, 0x9, 0x1,
+        0xE, 0x6, 0xC, 0x4, 0xA, 0x2, 0x8, 0x0,
+        0xF, 0x7, 0xD, 0x5, 0xB, 0x3, 0x9, 0x1,
+        0xE, 0x6, 0xC, 0x4, 0xA, 0x2, 0x8, 0x0);
+    // clang-format on
+    // 64bitずつでloの下位8bit、loの上位8bit、hiの下位8bit、hiの上位8bitに並び替えた
+    const __m256i shuffled1 = _mm256_shuffle_epi8(c, order);
+
+    // 64bitの範囲ずつ水平方向に合計
+    const __m256i zeros = _mm256_setzero_si256();
+    const __m256i s = _mm256_sad_epu8(shuffled1, zeros);
+    // 32bitの範囲で正しい位置にそれぞれシフト
+    // loの13bitより上をhiに含めた
+    const __m256i shift = _mm256_set_epi64x(13 + 8, 13, 8, 0);
+    // t0, _, t2, _, t4, _ t6, _
+    const __m256i t = _mm256_sllv_epi64(s, shift);
+
+    // t2, _, t0, _, t6, _, t4, _
+    const __m256i shuffled2 = _mm256_shuffle_epi32(t, _MM_SHUFFLE(2, 3, 0, 1));
+    // t0+t2, _, _, _, t4+t6, _, _, _
+    const __m256i u = _mm256_add_epi64(shuffled2, t);
+
+    const __m128i hi = _mm256_extractf128_si256(u, 1);
+    const __m128i lo = _mm256_extractf128_si256(u, 0);
+
+    // それぞれから下位32bitを取り出す
+    scale_buffer[kScaleIndex] = _mm_cvtsi128_si32(lo) + _mm_cvtsi128_si32(hi);
   }
 
  private:
@@ -306,6 +340,7 @@ class FeatureTransformer {
   // パラメータの型
   using BiasType = std::int16_t;
   using WeightType = std::int16_t;
+  using ScaleType = int16_t;
 
   // 学習用クラスをfriendにする
   friend class Trainer<FeatureTransformer>;
