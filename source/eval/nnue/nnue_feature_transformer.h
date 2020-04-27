@@ -95,13 +95,21 @@ class FeatureTransformer {
 
     constexpr IndexType kNumChunks = kHalfDimensions / kSimdWidth;
     // スケール用の合計
-    // 32bitのうちの下位13bit
+    // 32bitのうちの下位11bit
     __m256i sum_lo = _mm256_setzero_si256();
     // スケール用の合計
     // sum_loの担当より上のbit
     __m256i sum_hi = _mm256_setzero_si256();
-    // 上位3bitのマスク
-    const __m256i sum_mask = _mm256_set1_epi16(0xE000);
+    // 上位5bitのマスク
+    constexpr uint16_t mask_value = 0xF800;
+    constexpr IndexType mask_size = 11;
+    static_assert((mask_value & ((1 << mask_size) - 1)) == 0, "");
+    static_assert(mask_value == static_cast<uint16_t>(~((1 << mask_size) - 1)),
+      "");
+    const __m256i sum_mask = _mm256_set1_epi16(mask_value);
+
+    // 値をクリップ
+    const __m256i max_value = _mm256_set1_epi16(1 << mask_size);
 
     const auto& accumulation = pos.state()->accumulator.accumulation;
     const Color perspectives[2] = {pos.side_to_move(), ~pos.side_to_move()};
@@ -113,17 +121,13 @@ class FeatureTransformer {
       const auto ptr = accumulation[perspectives[p]];
       __m256i mask = _mm256_set1_epi16(1);
       for (IndexType j = 0; j < kNumChunks; ++j) {
-        __m256i v1 = _mm256_load_si256(
-            &reinterpret_cast<const __m256i*>(ptr[0])[2 * j + 0]);
-        __m256i v2 = _mm256_load_si256(
-            &reinterpret_cast<const __m256i*>(ptr[0])[2 * j + 1]);
+        const auto tmp = reinterpret_cast<const __m256i*>(ptr[0]);
+        __m256i v1 = _mm256_load_si256(&tmp[2 * j + 0]);
+        __m256i v2 = _mm256_load_si256(&tmp[2 * j + 1]);
         for (IndexType k = 1; k < kRefreshTriggers.size(); ++k) {
-          v1 = _mm256_add_epi16(
-              v1, _mm256_load_si256(
-                      &reinterpret_cast<const __m256i*>(ptr[k])[2 * j + 0]));
-          v2 = _mm256_add_epi16(
-              v2, _mm256_load_si256(
-                      &reinterpret_cast<const __m256i*>(ptr[k])[2 * j + 1]));
+          const auto tmp2 = reinterpret_cast<const __m256i*>(ptr[k]);
+          v1 = _mm256_add_epi16(v1, _mm256_load_si256(&tmp2[2 * j + 0]));
+          v2 = _mm256_add_epi16(v2, _mm256_load_si256(&tmp2[2 * j + 1]));
         }
         //
         // 2値化
@@ -138,16 +142,17 @@ class FeatureTransformer {
         // 入力ベクトルのスケールを計算
         //
         // 絶対値の合計
-        sum_lo = _mm256_adds_epi16(sum_lo, _mm256_abs_epi16(v1));
-        sum_lo = _mm256_adds_epi16(sum_lo, _mm256_abs_epi16(v2));
-        // ある程度の大きさの数値で毎回は計算しなくてもoverflowはない
-        if (j % 2) {
-          sum_hi = _mm256_adds_epi16(
-              sum_hi,
-              _mm256_slli_epi16(_mm256_and_si256(sum_lo, sum_mask), 13));
-          sum_lo = _mm256_andnot_si256(sum_mask, sum_lo);
-        }
+        const auto clipped1 = _mm256_max_epi16(_mm256_abs_epi16(v1), max_value);
+        const auto clipped2 = _mm256_max_epi16(_mm256_abs_epi16(v2), max_value);
+        sum_lo = _mm256_adds_epi16(sum_lo, clipped1);
+        sum_lo = _mm256_adds_epi16(sum_lo, clipped2);
       }
+      // オーバーフローしない
+      static_assert((1 << mask_size) * kNumChunks * 2 + ((1 << mask_size) - 1) <
+                        std::numeric_limits<uint16_t>::max(),
+                    "");
+      sum_hi = _mm256_adds_epi16(sum_hi, _mm256_srai_epi16(sum_lo, mask_size));
+      sum_lo = _mm256_andnot_si256(sum_mask, sum_lo);
     }
     //
     // 水平方向に合計
@@ -161,9 +166,9 @@ class FeatureTransformer {
     // clang-format off
     const __m256i order =
       _mm256_set_epi8(0xF, 0x7, 0xD, 0x5, 0xB, 0x3, 0x9, 0x1,
-        0xE, 0x6, 0xC, 0x4, 0xA, 0x2, 0x8, 0x0,
-        0xF, 0x7, 0xD, 0x5, 0xB, 0x3, 0x9, 0x1,
-        0xE, 0x6, 0xC, 0x4, 0xA, 0x2, 0x8, 0x0);
+                      0xE, 0x6, 0xC, 0x4, 0xA, 0x2, 0x8, 0x0,
+                      0xF, 0x7, 0xD, 0x5, 0xB, 0x3, 0x9, 0x1,
+                      0xE, 0x6, 0xC, 0x4, 0xA, 0x2, 0x8, 0x0);
     // clang-format on
     // 64bitずつでloの下位8bit、loの上位8bit、hiの下位8bit、hiの上位8bitに並び替えた
     const __m256i shuffled1 = _mm256_shuffle_epi8(c, order);
@@ -173,7 +178,7 @@ class FeatureTransformer {
     const __m256i s = _mm256_sad_epu8(shuffled1, zeros);
     // 32bitの範囲で正しい位置にそれぞれシフト
     // loの13bitより上をhiに含めた
-    const __m256i shift = _mm256_set_epi64x(13 + 8, 13, 8, 0);
+    const __m256i shift = _mm256_set_epi64x(mask_size + 8, mask_size, 8, 0);
     // t0, _, t2, _, t4, _ t6, _
     const __m256i t = _mm256_sllv_epi64(s, shift);
 
