@@ -69,7 +69,7 @@ public:
   // 順伝播
   const OutputType* Propagate(
       const TransformedFeatureType* transformed_features, char* buffer,
-      std::int32_t* scale_buffer) const {
+      std::uint32_t* scale_buffer) const {
     const auto input =
         reinterpret_cast<const __m256i*>(previous_layer_.Propagate(
             transformed_features, buffer + kSelfBufferSize, scale_buffer));
@@ -84,16 +84,16 @@ public:
       // 正の値を1.5倍、負の値を0.5倍する
       // 頑張れば正の値をそのままで負の値を2^p倍(pは負の整数)にできるが、
       // 計算コストをかけるメリットがあるのかは不明
-      const __m256i x = _mm256_load_si256(&inputs[i]);
+      const __m256i x = _mm256_load_si256(&input[i]);
       const __m256i y = _mm256_srli_epi32(_mm256_abs_epi32(x), 1);
-      _mm256_store_si256(&outpus[i], _mm256_add_epi32(x, y));
+      _mm256_store_si256(&output[i], _mm256_add_epi32(x, y));
     }
-    return buffer;
+    return reinterpret_cast<OutputType*>(buffer);
   }
 
 private:
   // 学習用クラスをfriendにする
-  friend class Trainer<ClippedReLU>;
+  friend class Trainer<LeakyReLU>;
 
   // この層の直前の層
   PreviousLayer previous_layer_;

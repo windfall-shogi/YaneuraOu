@@ -31,6 +31,11 @@ class InputSlice {
   // 入力層からこの層までで使用する順伝播用バッファのサイズ
   static constexpr std::size_t kBufferSize = 0;
 
+  //! スケール用バッファのインデックス
+  /*! ここでは利用せず上の層に値を伝えるだけ
+      値を読み取る位置 */
+  static constexpr IndexType kScaleIndex = 0;
+
   // 評価関数ファイルに埋め込むハッシュ値
   static constexpr std::uint32_t GetHashValue() {
     std::uint32_t hash_value = 0xEC42E90Du;
@@ -57,8 +62,8 @@ class InputSlice {
 
   // 順伝播
   const OutputType* Propagate(
-      const TransformedFeatureType* transformed_features,
-      char* /*buffer*/) const {
+      const TransformedFeatureType* transformed_features, char* /*buffer*/,
+      std::uint32_t* /*scale_buffer*/) const {
     return transformed_features + Offset;
   }
 

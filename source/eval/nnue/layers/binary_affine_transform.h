@@ -96,7 +96,7 @@ public:
   // ‡“`”d
   const OutputType* Propagate(
       const TransformedFeatureType* transformed_features, char* buffer,
-      std::int32_t* scale_buffer) const {
+      std::uint32_t* scale_buffer) const {
     const auto input = previous_layer_.Propagate(
       transformed_features, buffer + kSelfBufferSize, scale_buffer);
     const auto output = reinterpret_cast<__m256i*>(buffer);
@@ -166,7 +166,7 @@ public:
           sum_a = _mm256_add_epi8(sum_a, a);
           sum_b = _mm256_add_epi8(sum_b, b);
         }
-        const __m256i sum = _mm256_sad_epu8(sum_a, smu_b);
+        const __m256i sum = _mm256_sad_epu8(sum_a, sum_b);
         result = _mm256_or_si256(
           result, _mm256_slli_epi64(sum, j * sizeof(ScaleType) * 8));
       }
@@ -174,20 +174,20 @@ public:
       result = _mm256_mullo_epi32(result, input_scale);
 
       _mm256_store_si256(
-          &outputs[i], _mm256_add_epi32(result, _mm256_load_si256(&biases[i])));
+          &output[i], _mm256_add_epi32(result, _mm256_load_si256(&biases[i])));
     }
 
-    return buffer;
+    return reinterpret_cast<OutputType*>(buffer);
   }
 
 private:
   // ƒpƒ‰ƒ[ƒ^‚ÌŒ^
   using BiasType = OutputType;
   using WeightType = std::int8_t;
-  using ScaleType = OutputType;
+  using ScaleType = uint32_t;
 
   // ŠwK—pƒNƒ‰ƒX‚ğfriend‚É‚·‚é
-  friend class Trainer<AffineTransform>;
+  friend class Trainer<BinaryAffineTransform>;
 
   // ‚±‚Ì‘w‚Ì’¼‘O‚Ì‘w
   PreviousLayer previous_layer_;

@@ -131,9 +131,10 @@ namespace Eval {
 
   alignas(kCacheLineSize) TransformedFeatureType
       transformed_features[FeatureTransformer::kBufferSize];
-  feature_transformer->Transform(pos, transformed_features, refresh);
+  alignas(kCacheLineSize) std::uint32_t scales[Network::kScaleIndex + 1];
+  feature_transformer->Transform(pos, transformed_features, scales, refresh);
   alignas(kCacheLineSize) char buffer[Network::kBufferSize];
-  const auto output = network->Propagate(transformed_features, buffer);
+  const auto output = network->Propagate(transformed_features, buffer, scales);
 
   // VALUE_MAX_EVALより大きな値が返ってくるとaspiration searchがfail highして
   // 探索が終わらなくなるのでVALUE_MAX_EVAL以下であることを保証すべき。

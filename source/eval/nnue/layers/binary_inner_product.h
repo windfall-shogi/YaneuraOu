@@ -16,6 +16,7 @@ namespace Layers {
 
 template <typename PreviousLayer, IndexType OutputDimensions = 1>
 class BinaryInnerProduct {
+public:
   // 入出力の型
   using InputType = typename PreviousLayer::OutputType;
   using OutputType = std::int32_t;
@@ -60,12 +61,12 @@ class BinaryInnerProduct {
   // パラメータを読み込む
   bool ReadParameters(std::istream& stream) {
     if (!previous_layer_.ReadParameters(stream)) return false;
-    stream.read(reinterpret_cast<char*>(&biases_),
+    stream.read(reinterpret_cast<char*>(&bias_),
       kOutputDimensions * sizeof(BiasType));
     stream.read(
       reinterpret_cast<char*>(weights_),
       kOutputDimensions * kPaddedInputDimensions * sizeof(WeightType));
-    stream.read(reinterpret_cast<char*>(&scales_),
+    stream.read(reinterpret_cast<char*>(&scale_),
       kOutputDimensions * sizeof(ScaleType));
     return !stream.fail();
   }
@@ -73,12 +74,12 @@ class BinaryInnerProduct {
   // パラメータを書き込む
   bool WriteParameters(std::ostream& stream) const {
     if (!previous_layer_.WriteParameters(stream)) return false;
-    stream.write(reinterpret_cast<const char*>(&biases_),
+    stream.write(reinterpret_cast<const char*>(&bias_),
       kOutputDimensions * sizeof(BiasType));
     stream.write(
       reinterpret_cast<const char*>(weights_),
       kOutputDimensions * kPaddedInputDimensions * sizeof(WeightType));
-    stream.write(reinterpret_cast<const char*>(&scales_),
+    stream.write(reinterpret_cast<const char*>(&scale_),
       kOutputDimensions * sizeof(ScaleType));
     return !stream.fail();
   }
@@ -86,9 +87,10 @@ class BinaryInnerProduct {
   // 順伝播
   const OutputType* Propagate(
       const TransformedFeatureType* transformed_features, char* buffer,
-      std::int32_t* scale_buffer) const {
-    const auto input = previous_layer_.Propagate(
-        transformed_features, buffer + kSelfBufferSize, scale_buffer);
+      std::uint32_t* scale_buffer) const {
+    const auto input =
+        reinterpret_cast<const __m256i*>(previous_layer_.Propagate(
+            transformed_features, buffer + kSelfBufferSize, scale_buffer));
     const auto output = reinterpret_cast<OutputType*>(buffer);
 #if !defined(USE_AVX2)
 #error Not Implemented.
@@ -101,7 +103,8 @@ class BinaryInnerProduct {
       const auto x = _mm256_stream_load_si256(&input[i]);
 
       const IndexType index = kSimdWidth / sizeof(WeightType) * i;
-      const auto w = _mm256_load_si256(&weights_[index]);
+      const auto w =
+          _mm256_load_si256(reinterpret_cast<const __m256i*>(&weights_[index]));
 
       // xとwを要素ごとに掛け算
       // 補数で1を足す処理はバイアス項にまとめた
@@ -117,10 +120,10 @@ class BinaryInnerProduct {
     const __m256i total1 = _mm256_add_epi32(sum, shuffle1);
 
     // sum1+sum3, sum0+sum2, _, _,  sum5+sum7, sum4+sum6, _, _
-    const _m256i shuffle2 =
+    const __m256i shuffle2 =
         _mm256_shuffle_epi32(total1, _MM_SHUFFLE(2, 3, 0, 1));
     // sum0+sum1+sum2+sum3, _, _, _, sum4+sum5+sum6+sum7, _, _, _
-    const _m256i total2 = _mm256_add_epi32(total1, shuffle2);
+    const __m256i total2 = _mm256_add_epi32(total1, shuffle2);
 
     const __m128i hi = _mm256_extractf128_si256(total2, 1);
     const __m128i lo = _mm256_extractf128_si256(total2, 0);
@@ -128,23 +131,23 @@ class BinaryInnerProduct {
     const int32_t v = _mm_cvtsi128_si32(lo) + _mm_cvtsi128_si32(hi);
 
     // まだ前のbinary denseの入力と重みについて平均にしていない(合計のまま)
-    constexpr IndexType shift = Log2<InputDimensions>::value * 2;
+    constexpr IndexType shift = Log2<kInputDimensions>::value * 2;
 
     // まだこの層での重みについての平均が残っている
     // この後でFV_SCALEで割る処理があるので、そこで一緒に行う
     output[0] = (v >> shift) * scale_ + bias_;
 
-    return buffer;
+    return output;
   }
 
  private:
   // パラメータの型
-  using ScaleType = OutputType;
+  using ScaleType = uint32_t;
   using BiasType = OutputType;
   using WeightType = InputType;
 
   // 学習用クラスをfriendにする
-  friend class Trainer<AffineTransform>;
+  friend class Trainer<BinaryInnerProduct>;
 
   // この層の直前の層
   PreviousLayer previous_layer_;

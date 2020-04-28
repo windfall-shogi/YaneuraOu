@@ -65,7 +65,7 @@ public:
   // 順伝播
   const OutputType* Propagate(
       const TransformedFeatureType* transformed_features, char* buffer,
-      std::int32_t* scale_buffer) const {
+      std::uint32_t* scale_buffer) const {
     const auto input =
         reinterpret_cast<const __m256i*>(previous_layer_.Propagate(
             transformed_features, buffer + kSelfBufferSize, scale_buffer));
@@ -78,7 +78,7 @@ public:
         kInputDimensions / kSimdWidth * sizeof(InputType);
     constexpr IndexType kNumInputSize = sizeof(InputType);
 
-    __m256i sum = _mm256_set_zero_si256();
+    __m256i sum = _mm256_setzero_si256();
     for (IndexType i = 0; i < kNumInputChunks / kNumInputSize; ++i) {
       const IndexType offset = i * kNumInputSize;
       const __m256i in0 = _mm256_load_si256(&input[offset + 0]);
@@ -98,7 +98,7 @@ public:
       const __m256i c = _mm256_packs_epi16(a, b);
       // 各int8_tの最上位ビットを集める
       // そのため正なら0、負なら1で2値化される
-      outpus[i] = _mm256_movemask_epi8(c);
+      output[i] = _mm256_movemask_epi8(c);
 
       //
       // 絶対値の合計
@@ -118,10 +118,10 @@ public:
     const __m256i total1 = _mm256_add_epi32(sum, shuffle1);
 
     // sum1+sum3, sum0+sum2, _, _,  sum5+sum7, sum4+sum6, _, _
-    const _m256i shuffle2 =
+    const __m256i shuffle2 =
       _mm256_shuffle_epi32(total1, _MM_SHUFFLE(2, 3, 0, 1));
     // sum0+sum1+sum2+sum3, _, _, _, sum4+sum5+sum6+sum7, _, _, _
-    const _m256i total2 = _mm256_add_epi32(total1, shuffle2);
+    const __m256i total2 = _mm256_add_epi32(total1, shuffle2);
 
     const __m128i hi = _mm256_extractf128_si256(total2, 1);
     const __m128i lo = _mm256_extractf128_si256(total2, 0);
@@ -130,16 +130,16 @@ public:
     // 前の層で入力ベクトルの要素の平均になっていない
     // まだ要素数で割っていない
     // Kernelの方も有効桁数をできるだけ保存するためにまだ平均になっていない
-    constexpr IndexType shift_bits = Log2<Previous::InputDimensions>::value * 2;
+    constexpr IndexType shift_bits = Log2<PreviousLayer::kInputDimensions>::value * 2;
 
     scale_buffer[kScaleIndex] = v >> shift_bits;
 
-    return buffer;
+    return reinterpret_cast<OutputType*>(buffer);
   }
 
 private:
   // 学習用クラスをfriendにする
-  friend class Trainer<ClippedReLU>;
+  friend class Trainer<Binarization>;
 
   // この層の直前の層
   PreviousLayer previous_layer_;

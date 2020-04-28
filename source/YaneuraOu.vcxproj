@@ -395,6 +395,7 @@
     <ClInclude Include="eval\evaluate_mir_inv_tools.h" />
     <ClInclude Include="eval\kppt\evaluate_kppt.h" />
     <ClInclude Include="eval\kpp_kkpt\evaluate_kpp_kkpt.h" />
+    <ClInclude Include="eval\nnue\architectures\halfkp_256x2-128-128.h" />
     <ClInclude Include="eval\nnue\architectures\halfkp_256x2-32-32.h" />
     <ClInclude Include="eval\nnue\architectures\k-p_256x2-32-32.h" />
     <ClInclude Include="eval\nnue\evaluate_nnue.h" />

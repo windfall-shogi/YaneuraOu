@@ -27,7 +27,7 @@ class FeatureTransformer {
   // 出力の型
   using OutputType = TransformedFeatureType;
   //! スケールの型
-  using ScaleType = int32_t;
+  using ScaleType = uint32_t;
 
 
   // 入出力の次元数
@@ -87,7 +87,7 @@ class FeatureTransformer {
   }
 
   // 入力特徴量を変換する
-  void Transform(const Position& pos, OutputType* output, int32_t* scale_buffer,
+  void Transform(const Position& pos, OutputType* output, ScaleType* scale_buffer,
                  bool refresh) const {
     if (refresh || !UpdateAccumulatorIfPossible(pos)) {
       RefreshAccumulator(pos);
@@ -345,7 +345,7 @@ class FeatureTransformer {
   // パラメータの型
   using BiasType = std::int16_t;
   using WeightType = std::int16_t;
-  using ScaleType = int16_t;
+  //using ScaleType = int16_t;
 
   // 学習用クラスをfriendにする
   friend class Trainer<FeatureTransformer>;
