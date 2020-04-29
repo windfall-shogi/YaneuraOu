@@ -108,18 +108,19 @@ public:
     constexpr IndexType kNumblocks = kSimdWidth / sizeof(BlockType);
     static_assert(kNumblocks == 4, "");
     // 入力ベクトルを何回に分けて積を計算するか
-    // ブロック数
-    // 512bitなら8
+    // maddで隣接部分とmergeするので前半と後半に分けたそれぞれが何回か
+    // 512bitなら4
     constexpr IndexType kNumInputChucks =
-        kInputDimensions / sizeof(BlockType) / 8;
+        kInputDimensions / 2 / sizeof(BlockType) / 8;
     // 出力ベクトルを何回に分けて計算するか
-    // 1回の処理で4個計算できる
-    // 256次元なら64
-    constexpr IndexType kNumOutputChunks = kOutputDimensions / kNumblocks;
+    // 1回の処理で8個計算できる
+    // 256次元なら32
+    constexpr IndexType kNumOutputChunks =
+        kOutputDimensions / (kSimdWidth / sizeof(OutputType));
 
-    // 1blockあたりに32bitの要素がいくつ含まれるか
-    constexpr IndexType kNumElements = sizeof(BlockType) / sizeof(OutputType);
-    static_assert(kNumElements == 2, "");
+    // 1blockあたりに16bitの要素がいくつ含まれるか
+    constexpr IndexType kNumElements = sizeof(BlockType) / sizeof(int16_t);
+    static_assert(kNumElements == 4, "");
     // 配列の外側にアクセスするのを防ぐ
     static_assert(kOutputDimensions % (kNumblocks * kNumElements) == 0, "");
 
@@ -131,6 +132,9 @@ public:
         _mm256_setr_epi8(8, 7, 7, 6, 7, 6, 6, 5, 7, 6, 6, 5, 6, 5, 5, 4, 8, 7,
                          7, 6, 7, 6, 6, 5, 7, 6, 6, 5, 6, 5, 5, 4);
 
+    // ±1の掛け算の結果に変換するオフセット
+    const __m256i count_offset = _mm256_set1_epi16(kInputDimensions / 4);
+
     std::array<__m256i, kNumInputChucks> input_list;
     for (IndexType i = 0; i < kNumInputChucks; ++i) {
       input_list[i] =
@@ -140,17 +144,22 @@ public:
     const auto weights = reinterpret_cast<const __m256i*>(weights_);
     const auto weight_scales = reinterpret_cast<const __m256i*>(scales_);
     const auto biases = reinterpret_cast<const __m256i*>(biases_);
-    const auto input_scale = _mm256_set1_epi32(scale_buffer[kScaleIndex]);
+    // 入力の平均
+    const auto input_scale =
+        _mm256_set1_epi16(scale_buffer[kScaleIndex / kInputDimensions]);
 
     for (IndexType i = 0; i < kNumOutputChunks; ++i) {
       __m256i result = _mm256_setzero_si256();
       for (IndexType j = 0; j < kNumElements; ++j) {
         __m256i sum_a = _mm256_setzero_si256();
         __m256i sum_b = _mm256_setzero_si256();
+
+        const IndexType flag = j & 0x1;
         const IndexType offset = i * kNumElements + j;
         for (IndexType k = 0; k < kNumInputChucks; ++k) {
-          const __m256i& in = input_list[k];
-          const auto w = _mm256_load_si256(&weights[offset * kNumInputChucks + k]);
+          const __m256i& in = input_list[k + flag * kNumInputChucks];
+          const auto w =
+              _mm256_load_si256(&weights[offset * kNumInputChucks + k]);
 
           // xor
           const __m256i xor = _mm256_xor_si256(in, w);
@@ -167,11 +176,14 @@ public:
           sum_b = _mm256_add_epi8(sum_b, b);
         }
         const __m256i sum = _mm256_sad_epu8(sum_a, sum_b);
-        result = _mm256_or_si256(
-          result, _mm256_slli_epi64(sum, j * sizeof(ScaleType) * 8));
+        result = _mm256_or_si256(result, _mm256_slli_epi64(sum, j * 16));
       }
-      result = _mm256_madd_epi16(result, _mm256_load_si256(&weight_scales[i]));
-      result = _mm256_mullo_epi32(result, input_scale);
+      // 0の個数を±1の掛け算の結果に変換する
+      result = _mm256_sub_epi16(result, count_offset);
+      // 16bitで収まるようにkernelのスケールは調整してある
+      result = _mm256_mullo_epi16(result, _mm256_load_si256(&kernel_scales[i]));
+      // 32bit
+      result = _mm256_madd_epi16(result, input_scale);
 
       _mm256_store_si256(
           &output[i], _mm256_add_epi32(result, _mm256_load_si256(&biases[i])));
