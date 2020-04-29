@@ -135,10 +135,11 @@ public:
     // }1‚ÌŠ|‚¯Z‚ÌŒ‹‰Ê‚É•ÏŠ·‚·‚éƒIƒtƒZƒbƒg
     const __m256i count_offset = _mm256_set1_epi16(kInputDimensions / 4);
 
-    std::array<__m256i, kNumInputChucks> input_list;
+    __m256i input_list[2][kNumInputChucks];
     for (IndexType i = 0; i < kNumInputChucks; ++i) {
-      input_list[i] =
-          _mm256_set1_epi64x(reinterpret_cast<const std::int64_t*>(input)[i]);
+      const auto p = reinterpret_cast<const std::int64_t*>(input);
+      input_list[0][i] = _mm256_set1_epi64x(p[i + 0 * kNumInputChucks]);
+      input_list[1][i] = _mm256_set1_epi64x(p[i + 1 * kNumInputChucks]);
     }
 
     const auto weights = reinterpret_cast<const __m256i*>(weights_);
@@ -157,7 +158,7 @@ public:
         const IndexType flag = j & 0x1;
         const IndexType offset = i * kNumElements + j;
         for (IndexType k = 0; k < kNumInputChucks; ++k) {
-          const __m256i& in = input_list[k + flag * kNumInputChucks];
+          const __m256i& in = input_lis[flag][k];
           const auto w =
               _mm256_load_si256(&weights[offset * kNumInputChucks + k]);
 
