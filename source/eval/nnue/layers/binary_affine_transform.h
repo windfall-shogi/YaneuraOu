@@ -158,7 +158,7 @@ public:
         const IndexType flag = j & 0x1;
         const IndexType offset = i * kNumElements + j;
         for (IndexType k = 0; k < kNumInputChucks; ++k) {
-          const __m256i& in = input_lis[flag][k];
+          const __m256i& in = input_list[flag][k];
           const auto w =
               _mm256_load_si256(&weights[offset * kNumInputChucks + k]);
 
@@ -182,7 +182,7 @@ public:
       // 0‚ÌŒÂ”‚ð}1‚ÌŠ|‚¯ŽZ‚ÌŒ‹‰Ê‚É•ÏŠ·‚·‚é
       result = _mm256_sub_epi16(result, count_offset);
       // 16bit‚ÅŽû‚Ü‚é‚æ‚¤‚Ékernel‚ÌƒXƒP[ƒ‹‚Í’²®‚µ‚Ä‚ ‚é
-      result = _mm256_mullo_epi16(result, _mm256_load_si256(&kernel_scales[i]));
+      result = _mm256_mullo_epi16(result, _mm256_load_si256(&weight_scales[i]));
       // 32bit
       result = _mm256_madd_epi16(result, input_scale);
 
