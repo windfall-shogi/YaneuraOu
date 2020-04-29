@@ -157,8 +157,7 @@ public:
   //! バイアス項
   /*! 2の補数で1を加える分はここに含まれている */
   BiasType bias_;
-  alignas(kCacheLineSize)
-    WeightType weights_[kOutputDimensions];
+  alignas(kCacheLineSize) WeightType weights_[kInputDimensions];
 };
 
 }  // namespace Layers
