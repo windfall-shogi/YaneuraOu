@@ -44,7 +44,7 @@ class FeatureTransformer {
 
   // 評価関数ファイルに埋め込むハッシュ値
   static constexpr std::uint32_t GetHashValue() {
-    return RawFeatures::kHashValue ^ kOutputDimensions;
+    return RawFeatures::kHashValue ^ kOutputDimensions + kFeatureScaleBits;
   }
 
   // 構造を表す文字列
@@ -102,7 +102,7 @@ class FeatureTransformer {
     __m256i sum_hi = _mm256_setzero_si256();
     // 上位5bitのマスク
     constexpr uint16_t mask_value = 0xF800;
-    constexpr IndexType mask_size = 11;
+    constexpr IndexType mask_size = kFeatureScaleBits;
     static_assert((mask_value & ((1 << mask_size) - 1)) == 0, "");
     static_assert(mask_value == static_cast<uint16_t>(~((1 << mask_size) - 1)),
       "");
@@ -142,8 +142,8 @@ class FeatureTransformer {
         // 入力ベクトルのスケールを計算
         //
         // 絶対値の合計
-        const auto clipped1 = _mm256_max_epi16(_mm256_abs_epi16(v1), max_value);
-        const auto clipped2 = _mm256_max_epi16(_mm256_abs_epi16(v2), max_value);
+        const auto clipped1 = _mm256_min_epi16(_mm256_abs_epi16(v1), max_value);
+        const auto clipped2 = _mm256_min_epi16(_mm256_abs_epi16(v2), max_value);
         sum_lo = _mm256_adds_epi16(sum_lo, clipped1);
         sum_lo = _mm256_adds_epi16(sum_lo, clipped2);
       }

@@ -36,10 +36,14 @@ class InputSlice {
       値を読み取る位置 */
   static constexpr IndexType kScaleIndex = 0;
 
+  //! 累積のパラメータの倍率
+  static constexpr IndexType kShiftScaleBits = kFeatureScaleBits;
+
   // 評価関数ファイルに埋め込むハッシュ値
   static constexpr std::uint32_t GetHashValue() {
     std::uint32_t hash_value = 0xEC42E90Du;
     hash_value ^= kOutputDimensions ^ (Offset << 10);
+    hash_value ^= 1 << kShiftScaleBits;
     return hash_value;
   }
 

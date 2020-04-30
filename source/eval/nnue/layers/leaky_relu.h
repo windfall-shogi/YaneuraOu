@@ -42,10 +42,14 @@ public:
   /*! 使わない */
   static constexpr IndexType kScaleIndex = PreviousLayer::kScaleIndex;
 
+  //! 累積のパラメータの倍率
+  static constexpr IndexType kShiftScaleBits = PreviousLayer::kShiftScaleBits;
+
   // 評価関数ファイルに埋め込むハッシュ値
   static constexpr std::uint32_t GetHashValue() {
     std::uint32_t hash_value = 0xBB7BA525u;
     hash_value += PreviousLayer::GetHashValue();
+    hash_value += 1 << kShiftScaleBits;
     return hash_value;
   }
 

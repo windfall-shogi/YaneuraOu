@@ -8,6 +8,8 @@
 
 #include "../nnue_common.h"
 
+#include <limits>
+
 namespace Eval {
 
 namespace NNUE {
@@ -39,10 +41,15 @@ public:
   /*! 値を書き込む位置 */
   static constexpr IndexType kScaleIndex = PreviousLayer::kScaleIndex + 1;
 
+  //! 累積のパラメータの倍率
+  static constexpr IndexType kShiftScaleBits =
+      PreviousLayer::kShiftScaleBits - kFeatureScaleBits;
+
   // 評価関数ファイルに埋め込むハッシュ値
   static constexpr std::uint32_t GetHashValue() {
     std::uint32_t hash_value = 0xB5A1F2EFu;
     hash_value += PreviousLayer::GetHashValue();
+    hash_value += 1 << kShiftScaleBits;
     return hash_value;
   }
 
@@ -78,13 +85,21 @@ public:
         kInputDimensions / kSimdWidth * sizeof(InputType);
     constexpr IndexType kNumInputSize = sizeof(InputType);
 
+    // 値をクリップ
+    const __m256i max_value = _mm256_set1_epi16(1 << kShiftScaleBits);
+
     __m256i sum = _mm256_setzero_si256();
     for (IndexType i = 0; i < kNumInputChunks / kNumInputSize; ++i) {
       const IndexType offset = i * kNumInputSize;
-      const __m256i in0 = _mm256_load_si256(&input[offset + 0]);
-      const __m256i in1 = _mm256_load_si256(&input[offset + 1]);
-      const __m256i in2 = _mm256_load_si256(&input[offset + 2]);
-      const __m256i in3 = _mm256_load_si256(&input[offset + 3]);
+      // embedding層の分のスケールを打ち消す
+      const __m256i in0 = _mm256_srai_epi32(
+          _mm256_stream_load_si256(&input[offset + 0]), kFeatureScaleBits);
+      const __m256i in1 = _mm256_srai_epi32(
+          _mm256_stream_load_si256(&input[offset + 1]), kFeatureScaleBits);
+      const __m256i in2 = _mm256_srai_epi32(
+          _mm256_stream_load_si256(&input[offset + 2]), kFeatureScaleBits);
+      const __m256i in3 = _mm256_srai_epi32(
+          _mm256_stream_load_si256(&input[offset + 3]), kFeatureScaleBits);
 
       //
       // 2値化
@@ -103,19 +118,27 @@ public:
       //
       // 絶対値の合計
       //
-      const __m256i s =
-          _mm256_add_epi32(_mm256_abs_epi32(in0), _mm256_abs_epi32(in1));
-      const __m256i t =
-          _mm256_add_epi32(_mm256_abs_epi32(in2), _mm256_abs_epi32(in3));
-      const __m256i u = _mm256_add_epi32(s, t);
-      // そのまま足しても桁あふれはないと想定
-      sum = _mm256_add_epi32(sum, u);
+      const __m256i clipped_a =
+          _mm256_min_epi16(_mm256_abs_epi16(a), max_value);
+      const __m256i clipped_b =
+          _mm256_min_epi16(_mm256_abs_epi16(b), max_value);
+      // そのまま足しても桁あふれはない
+      static_assert(kInputDimensions / 16 * (1 << kShiftScaleBits) <
+                        std::numeric_limits<std::uint16_t>::max(),
+                    "");
+      sum = _mm256_add_epi16(sum, _mm256_add_epi16(clipped_a, clipped_a));
     }
 
+    const __m256i mask = _mm256_set1_epi32(0x0000FFFF);
+    // 隣接する16bitの組を足して32bitにする
+    const __m256i sum32 =
+        _mm256_add_epi32(_mm256_and_si256(sum, mask),
+                         _mm256_and_si256(_mm256_srai_epi32(sum, 16), mask));
+
     // sum2, sum3, sum0, sum1, sum6, sum7 sum4, sum5
-    const __m256i shuffle1 = _mm256_shuffle_epi32(sum, _MM_SHUFFLE(1, 0, 3, 2));
+    const __m256i shuffle1 = _mm256_shuffle_epi32(sum32, _MM_SHUFFLE(1, 0, 3, 2));
     // sum0+sum2, sum1+sum3, _, _, sum4+sum6, sum5+sum7, _, _
-    const __m256i total1 = _mm256_add_epi32(sum, shuffle1);
+    const __m256i total1 = _mm256_add_epi32(sum32, shuffle1);
 
     // sum1+sum3, sum0+sum2, _, _,  sum5+sum7, sum4+sum6, _, _
     const __m256i shuffle2 =

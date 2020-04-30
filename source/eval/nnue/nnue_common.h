@@ -45,6 +45,9 @@ constexpr std::uint32_t kVersion = 0x7AF32F16u;
 constexpr int FV_SCALE = 16;
 constexpr int kWeightScaleBits = 6;
 
+//! embedding層でのパラメータの倍率
+constexpr int kFeatureScaleBits = 11;
+
 // キャッシュラインのサイズ（バイト単位）
 constexpr std::size_t kCacheLineSize = 64;
 

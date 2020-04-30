@@ -41,12 +41,23 @@ public:
   /*! 使わない */
   static constexpr IndexType kScaleIndex = PreviousLayer::kScaleIndex;
 
+private:
+  //! この層でのパラメータの倍率
+  /*! 学習結果に基づいてビット数は決定された */
+  static constexpr IndexType kSelfShiftScaleBits = 8;
+
+ public:
+  //! 累積のパラメータの倍率
+  static constexpr IndexType kShiftScaleBits =
+      PreviousLayer::kShiftScaleBits + kSelfShiftScaleBits;
+
   // 評価関数ファイルに埋め込むハッシュ値
   static constexpr std::uint32_t GetHashValue() {
     std::uint32_t hash_value = 0xBA3BA60Cu;
     hash_value += kOutputDimensions;
     hash_value ^= PreviousLayer::GetHashValue() >> 1;
     hash_value ^= PreviousLayer::GetHashValue() << 31;
+    hash_value ^= 1 << kShiftScaleBits;
     return hash_value;
   }
 
