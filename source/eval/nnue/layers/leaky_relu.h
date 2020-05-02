@@ -42,8 +42,15 @@ public:
   /*! 使わない */
   static constexpr IndexType kScaleIndex = PreviousLayer::kScaleIndex;
 
+ private:
+  //! この層で打ち消すパラメータの倍率
+  /*! 何かいい感じの値 */
+  static constexpr IndexType kSelfShiftScaleBits = 12;
+
+ public:
   //! 累積のパラメータの倍率
-  static constexpr IndexType kShiftScaleBits = PreviousLayer::kShiftScaleBits;
+  static constexpr IndexType kShiftScaleBits =
+          PreviousLayer::kShiftScaleBits - kSelfShiftScaleBits;
 
   // 評価関数ファイルに埋め込むハッシュ値
   static constexpr std::uint32_t GetHashValue() {
@@ -90,7 +97,9 @@ public:
       // 計算コストをかけるメリットがあるのかは不明
       const __m256i x = _mm256_load_si256(&input[i]);
       const __m256i y = _mm256_srli_epi32(_mm256_abs_epi32(x), 1);
-      _mm256_store_si256(&output[i], _mm256_add_epi32(x, y));
+      const __m256i z = _mm256_add_epi32(x, y);
+      // 桁数を調整
+      _mm256_store_si256(&output[i], _mm256_srai_epi32(z, kSelfShiftScaleBits));
     }
     return reinterpret_cast<OutputType*>(buffer);
   }

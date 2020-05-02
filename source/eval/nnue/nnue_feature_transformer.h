@@ -136,7 +136,7 @@ class FeatureTransformer {
         const __m256i packed = _mm256_packs_epi16(v1, v2);
         // 各int8_tの最上位ビットを集める
         // そのため正なら0、負なら1で2値化される
-        out[p * kNumChunks + j] = _mm256_movemask_epi8(packed);
+        out[j] = _mm256_movemask_epi8(packed);
 
         //
         // 入力ベクトルのスケールを計算
@@ -183,15 +183,20 @@ class FeatureTransformer {
     const __m256i t = _mm256_sllv_epi64(s, shift);
 
     // t2, _, t0, _, t6, _, t4, _
-    const __m256i shuffled2 = _mm256_shuffle_epi32(t, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m256i shuffled2 = _mm256_shuffle_epi32(t, _MM_SHUFFLE(1, 0, 3, 2));
     // t0+t2, _, _, _, t4+t6, _, _, _
     const __m256i u = _mm256_add_epi64(shuffled2, t);
 
     const __m128i hi = _mm256_extractf128_si256(u, 1);
     const __m128i lo = _mm256_extractf128_si256(u, 0);
 
+    /*uint32_t tmp = 0;
+    for (int i = 0; i < 4; ++i) {
+      tmp += static_cast<uint32_t>(shuffled2.m256i_u64[i]);
+    }*/
     // それぞれから下位32bitを取り出す
     scale_buffer[kScaleIndex] = _mm_cvtsi128_si32(lo) + _mm_cvtsi128_si32(hi);
+    //scale_buffer[kScaleIndex] = tmp;
   }
 
  private:
