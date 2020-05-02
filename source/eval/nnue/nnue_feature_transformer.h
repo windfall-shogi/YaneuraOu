@@ -142,8 +142,8 @@ class FeatureTransformer {
         // 入力ベクトルのスケールを計算
         //
         // 絶対値の合計
-        const auto clipped1 = _mm256_min_epi16(_mm256_abs_epi16(v1), max_value);
-        const auto clipped2 = _mm256_min_epi16(_mm256_abs_epi16(v2), max_value);
+        const auto clipped1 = _mm256_min_epu16(_mm256_abs_epi16(v1), max_value);
+        const auto clipped2 = _mm256_min_epu16(_mm256_abs_epi16(v2), max_value);
         sum_lo = _mm256_adds_epi16(sum_lo, clipped1);
         sum_lo = _mm256_adds_epi16(sum_lo, clipped2);
       }

@@ -88,6 +88,16 @@ public:
     // 値をクリップ
     const __m256i max_value = _mm256_set1_epi16(1 << kShiftScaleBits);
 
+    sync_cout << "--- Inputs: " << "binarization" << " ---" << std::endl;
+    for (int i = 0; i < kInputDimensions; ++i) {
+      std::cout << (reinterpret_cast<const int32_t*>(input)[i] >> 11) << ' ';
+      if (i % 8 == 7) {
+        std::cout << std::endl;
+      }
+    }
+    std::cout << std::endl << "-----" << sync_endl;
+
+
     __m256i sum = _mm256_setzero_si256();
     for (IndexType i = 0; i < kNumInputChunks / kNumInputSize; ++i) {
       const IndexType offset = i * kNumInputSize;
@@ -119,14 +129,14 @@ public:
       // 絶対値の合計
       //
       const __m256i clipped_a =
-          _mm256_min_epi16(_mm256_abs_epi16(a), max_value);
+          _mm256_min_epu16(_mm256_abs_epi16(a), max_value);
       const __m256i clipped_b =
-          _mm256_min_epi16(_mm256_abs_epi16(b), max_value);
+          _mm256_min_epu16(_mm256_abs_epi16(b), max_value);
       // そのまま足しても桁あふれはない
       static_assert(kInputDimensions / 16 * (1 << kShiftScaleBits) <
                         std::numeric_limits<std::uint16_t>::max(),
                     "");
-      sum = _mm256_add_epi16(sum, _mm256_add_epi16(clipped_a, clipped_a));
+      sum = _mm256_adds_epi16(sum, _mm256_adds_epi16(clipped_a, clipped_b));
     }
 
     const __m256i mask = _mm256_set1_epi32(0x0000FFFF);
@@ -153,9 +163,13 @@ public:
     // 前の層で入力ベクトルの要素の平均になっていない
     // まだ要素数で割っていない
     // Kernelの方も有効桁数をできるだけ保存するためにまだ平均になっていない
-    constexpr IndexType shift_bits = Log2<PreviousLayer::kInputDimensions>::value * 2;
+    //constexpr IndexType shift_bits = Log2<PreviousLayer::kInputDimensions>::value * 2;
 
-    scale_buffer[kScaleIndex] = v >> shift_bits;
+    //uint32_t tmp = 0;
+    //for (int i = 0; i < 16; ++i) {
+    //  tmp += sum.m256i_u16[i];
+    //}
+    scale_buffer[kScaleIndex] = v;
 
     return reinterpret_cast<OutputType*>(buffer);
   }

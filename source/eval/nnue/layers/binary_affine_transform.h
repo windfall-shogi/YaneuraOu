@@ -124,7 +124,7 @@ public:
     }
     std::cout << std::endl << std::dec << "-----" << sync_endl;
     sync_cout << "--- Kernel: " << kInputDimensions << " ---" << std::hex << std::endl;
-    for (int i = 0; i < (kInputDimensions == 512 ? 72 : 4); ++i) {
+    for (int i = 0; i < 72; ++i) {
       std::cout << reinterpret_cast<const uint32_t*>(weights_)[i] << ' ';
       if (i % 8 == 7) {
         std::cout << std::endl;
@@ -139,7 +139,7 @@ public:
       }
     }
     std::cout << std::endl << "-----" << sync_endl;
-    sync_cout << "--- Bias: " << kInputDimensions << " ---" << std::endl;
+    sync_cout << "--- Scale: " << kInputDimensions << " ---" << std::endl;
     for (int i = 0; i < 16; ++i) {
       std::cout << reinterpret_cast<const uint16_t*>(scales_)[i] << ' ';
       if (i % 8 == 7) {
@@ -227,16 +227,26 @@ public:
       }
       // 0の個数を±1の掛け算の結果に変換する
       result = _mm256_sub_epi16(result, count_offset);
-      //const auto ones = _mm256_set1_epi16(1);
-      //result = _mm256_madd_epi16(result, ones);
-      // 16bitで収まるようにkernelのスケールは調整してある
-      result = _mm256_mullo_epi16(result, _mm256_load_si256(&weight_scales[i]));
-      // 32bit
-      result = _mm256_madd_epi16(result, input_scale);
+      if (kInputDimensions == 512) {
+        // 16bitで収まるようにkernelのスケールは調整してある
+        result = _mm256_mullo_epi16(result, _mm256_load_si256(&weight_scales[i]));
+        // 32bit
+        result = _mm256_madd_epi16(result, input_scale);
 
-      _mm256_store_si256(
+        _mm256_store_si256(
+            &output[i], _mm256_add_epi32(result, _mm256_load_si256(&biases[i])));
+      } else {
+        //const auto ones = _mm256_set1_epi16(1);
+        //result = _mm256_madd_epi16(result, ones);
+
+        // 16bitで収まるようにkernelのスケールは調整してある
+        result = _mm256_mullo_epi16(result, _mm256_load_si256(&weight_scales[i]));
+        // 32bit
+        result = _mm256_madd_epi16(result, input_scale);
+
+        _mm256_store_si256(
           &output[i], _mm256_add_epi32(result, _mm256_load_si256(&biases[i])));
-      //_mm256_store_si256(&output[i], result);
+      }
     }
 
     sync_cout << "--- Outputs: " << kInputDimensions << " ---" << std::endl;
