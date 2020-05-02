@@ -88,14 +88,14 @@ public:
     // 値をクリップ
     const __m256i max_value = _mm256_set1_epi16(1 << kShiftScaleBits);
 
-    sync_cout << "--- Inputs: " << "binarization" << " ---" << std::endl;
-    for (int i = 0; i < kInputDimensions; ++i) {
-      std::cout << (reinterpret_cast<const int32_t*>(input)[i] >> 11) << ' ';
-      if (i % 8 == 7) {
-        std::cout << std::endl;
-      }
-    }
-    std::cout << std::endl << "-----" << sync_endl;
+    //sync_cout << "--- Inputs: " << "binarization" << " ---" << std::endl;
+    //for (int i = 0; i < kInputDimensions; ++i) {
+    //  std::cout << (reinterpret_cast<const int32_t*>(input)[i] >> 11) << ' ';
+    //  if (i % 8 == 7) {
+    //    std::cout << std::endl;
+    //  }
+    //}
+    //std::cout << std::endl << "-----" << sync_endl;
 
 
     __m256i sum = _mm256_setzero_si256();
@@ -160,15 +160,6 @@ public:
     const __m128i lo = _mm256_extractf128_si256(total2, 0);
 
     const int32_t v = _mm_cvtsi128_si32(lo) + _mm_cvtsi128_si32(hi);
-    // 前の層で入力ベクトルの要素の平均になっていない
-    // まだ要素数で割っていない
-    // Kernelの方も有効桁数をできるだけ保存するためにまだ平均になっていない
-    //constexpr IndexType shift_bits = Log2<PreviousLayer::kInputDimensions>::value * 2;
-
-    //uint32_t tmp = 0;
-    //for (int i = 0; i < 16; ++i) {
-    //  tmp += sum.m256i_u16[i];
-    //}
     scale_buffer[kScaleIndex] = v;
 
     return reinterpret_cast<OutputType*>(buffer);

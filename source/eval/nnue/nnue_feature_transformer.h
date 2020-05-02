@@ -190,13 +190,8 @@ class FeatureTransformer {
     const __m128i hi = _mm256_extractf128_si256(u, 1);
     const __m128i lo = _mm256_extractf128_si256(u, 0);
 
-    /*uint32_t tmp = 0;
-    for (int i = 0; i < 4; ++i) {
-      tmp += static_cast<uint32_t>(shuffled2.m256i_u64[i]);
-    }*/
     // それぞれから下位32bitを取り出す
     scale_buffer[kScaleIndex] = _mm_cvtsi128_si32(lo) + _mm_cvtsi128_si32(hi);
-    //scale_buffer[kScaleIndex] = tmp;
   }
 
  private:
