@@ -53,13 +53,14 @@ public:
   //! この層でのパラメータの倍率
   /*! 学習結果に基づいてビット数は決定された */
   static constexpr IndexType kSelfShiftScaleBits =
-      kInputDimensions == 512 ? 9 : 12;
+      kInputDimensions == 512 ? 9 : 11;
 
  public:
   //! 累積のパラメータの倍率
-  /*! 各層での倍率も累積するので、適当なタイミングで打ち消す必要がある */
+  /*! 各層での倍率も累積するので、適当なタイミングで打ち消す必要がある
+      xorの部分で1bitを節約したので、スケールも1だけ小さくなる */
   static constexpr IndexType kShiftScaleBits =
-      PreviousLayer::kShiftScaleBits + kSelfShiftScaleBits;
+      PreviousLayer::kShiftScaleBits + kSelfShiftScaleBits - 1;
 
   // 評価関数ファイルに埋め込むハッシュ値
   static constexpr std::uint32_t GetHashValue() {

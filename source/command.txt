@@ -1,0 +1,23 @@
+EvalDir D:\Libraries\YaneuraOu\source\eval
+isready
+position lnkr3p+R/2sg+P4/2p3g2/p2psp3/1p7/P1P2G2p/BPNKpP+b+p1/3G5/L1S5L b NL2Psn2p 1
+eval
+position ln3g3/1r4pkl/p1p2+P1s1/7pp/2s1pN3/3p1G1bP/PPPP5/L1K1GP2L/1N2N1r2 w B2S2Pg2p 1
+eval
+position 5ns2/1G1Gsk3/1pp+B1p1b+R/3pP1ppp/lN3N3/3l3PP/1PP2PP2/+p2P1SG2/3GR1KNL b SPlp 1
+eval
+position 1n2k4/lr1g4+P/p1p3pp1/1p3+P3/l3g1SnL/2PPn2R1/PP1pG1PP+p/1S3p3/1SSK1L1N1 b B2Pbg 1
+eval
+position lg7/2sk1gg2/pp1pnp1pp/2pn5/9/2P+BsP1P1/PP4+B1P/2S1L3R/LNK2GS1L w R2Pn3p 1
+eval
+position ln5nl/2ksrs3/1ppp4p/p2g1gPp1/3SppgP1/PBPR4P/1PN1PPN1L/3G2KS1/L8 b B2P 1
+eval
+position ln5nl/2gsksg2/p3ppbpp/2pp5/4P1B2/P1PS3PP/2NP1PP1N/+p1G2R3/1+rSK1G2L w Plp 1
+eval
+position 2R2pSn1/3pk3l/5g1p1/4P1Ln1/3g1nS1P/BP4P2/G4S1P1/5+B2L/3rSK1N1 w 6Pgl4p 1
+eval
+position l2+R2nk1/5r3/1p4PG1/2+P1ppnNp/p+b7/4PP2G/P1g3GS1/3P1S1K1/L2bS2N1 b S3P2l4p 1
+eval
+position lnk4Gl/r1gs3b1/1p1pp1s1p/p1p2p1p1/6n2/PP6P/2PPPPPP1/LB1KG1R2/1NS2GS1L b NP 1
+eval
+quit

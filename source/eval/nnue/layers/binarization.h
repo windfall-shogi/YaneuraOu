@@ -41,9 +41,15 @@ public:
   /*! 値を書き込む位置 */
   static constexpr IndexType kScaleIndex = PreviousLayer::kScaleIndex + 1;
 
+private:
+  //! この層で打ち消すパラメータの倍率
+  /*! ビット数は学習結果に基づいて良い感じに決定された */
+  static constexpr IndexType kSelfShiftScaleBits = kFeatureScaleBits - 1;
+
+ public:
   //! 累積のパラメータの倍率
   static constexpr IndexType kShiftScaleBits =
-      PreviousLayer::kShiftScaleBits - kFeatureScaleBits;
+      PreviousLayer::kShiftScaleBits - kSelfShiftScaleBits;
 
   // 評価関数ファイルに埋め込むハッシュ値
   static constexpr std::uint32_t GetHashValue() {
@@ -86,6 +92,7 @@ public:
     constexpr IndexType kNumInputSize = sizeof(InputType);
 
     // 値をクリップ
+    // embedding層のスケールを打ち消したので、直前の層のスケールのみになっている
     const __m256i max_value = _mm256_set1_epi16(1 << kShiftScaleBits);
 
     //sync_cout << "--- Inputs: " << "binarization" << " ---" << std::endl;
@@ -103,13 +110,13 @@ public:
       const IndexType offset = i * kNumInputSize;
       // embedding層の分のスケールを打ち消す
       const __m256i in0 = _mm256_srai_epi32(
-          _mm256_stream_load_si256(&input[offset + 0]), kFeatureScaleBits);
+          _mm256_stream_load_si256(&input[offset + 0]), kSelfShiftScaleBits);
       const __m256i in1 = _mm256_srai_epi32(
-          _mm256_stream_load_si256(&input[offset + 1]), kFeatureScaleBits);
+          _mm256_stream_load_si256(&input[offset + 1]), kSelfShiftScaleBits);
       const __m256i in2 = _mm256_srai_epi32(
-          _mm256_stream_load_si256(&input[offset + 2]), kFeatureScaleBits);
+          _mm256_stream_load_si256(&input[offset + 2]), kSelfShiftScaleBits);
       const __m256i in3 = _mm256_srai_epi32(
-          _mm256_stream_load_si256(&input[offset + 3]), kFeatureScaleBits);
+          _mm256_stream_load_si256(&input[offset + 3]), kSelfShiftScaleBits);
 
       //
       // 2値化

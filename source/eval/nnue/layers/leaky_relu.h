@@ -45,7 +45,7 @@ public:
  private:
   //! この層で打ち消すパラメータの倍率
   /*! 何かいい感じの値 */
-  static constexpr IndexType kSelfShiftScaleBits = 12;
+  static constexpr IndexType kSelfShiftScaleBits = 16;
 
  public:
   //! 累積のパラメータの倍率

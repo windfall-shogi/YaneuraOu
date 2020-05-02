@@ -1,0 +1,6 @@
+EvalDir hoge
+SkipLoadingEval true
+isready
+EvalSaveDir eval_zero
+test evalsave 
+quit

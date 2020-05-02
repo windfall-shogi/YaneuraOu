@@ -148,7 +148,7 @@ namespace Eval {
   // しかし、教師生成時などdepth固定で探索するときに探索から戻ってこなくなるので
   // そのスレッドの計算時間を無駄にする。またdepth固定対局でtime-outするようになる。
 
-  auto score = static_cast<Value>(output[0] >> Network::kShiftScaleBits);
+  auto score = static_cast<Value>(output[0] / (1 << Network::kShiftScaleBits));
 
   // 1) ここ、下手にclipすると学習時には影響があるような気もするが…。
   // 2) accumulator.scoreは、差分計算の時に用いないので書き換えて問題ない。

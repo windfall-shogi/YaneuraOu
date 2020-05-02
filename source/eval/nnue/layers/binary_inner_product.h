@@ -141,12 +141,9 @@ private:
 
     const int32_t v = _mm_cvtsi128_si32(lo) + _mm_cvtsi128_si32(hi);
 
-    // まだ前のbinary denseの入力と重みについて平均にしていない(合計のまま)
-    constexpr IndexType shift = Log2<kInputDimensions>::value * 2;
-
     // まだこの層での重みについての平均が残っている
     // この後でFV_SCALEで割る処理があるので、そこで一緒に行う
-    output[0] = (v >> shift) * scale_ + bias_;
+    output[0] = v * scale_ + bias_;
 
     return output;
   }
