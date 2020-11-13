@@ -30,7 +30,7 @@ class HalfKP {
   static constexpr IndexType kDimensions =
       static_cast<IndexType>(SQ_NB) * static_cast<IndexType>(fe_end);
   // 特徴量のうち、同時に値が1となるインデックスの数の最大値
-  static constexpr IndexType kMaxActiveDimensions = PIECE_NUMBER_KING;
+  static constexpr IndexType kMaxActiveDimensions = PIECE_NUMBER_KING + 1;
   // 差分計算の代わりに全計算を行うタイミング
   static constexpr TriggerEvent kRefreshTrigger =
       (AssociatedKing == Side::kFriend) ?

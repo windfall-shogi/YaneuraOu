@@ -275,7 +275,7 @@ constexpr int MAX_PLY_NUM = 246;
 //
 // 実行時に"param/yaneuraou-param.h" からパラメーターファイルを読み込むので
 // "source/engine/yaneuraou-engine/yaneuraou-param.h"をそこに配置すること。
-//#define TUNING_SEARCH_PARAMETERS
+// #define TUNING_SEARCH_PARAMETERS
 
 
 // --------------------

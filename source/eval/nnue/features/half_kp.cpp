@@ -13,6 +13,11 @@ namespace NNUE {
 
 namespace Features {
 
+template <Side AssociatedKing>
+inline constexpr PieceNumber GetKingPieceNumber(const Color persepective) noexcept {
+  return static_cast<PieceNumber>(PIECE_NUMBER_KING + (AssociatedKing == Side::kFriend ? persepective : ~persepective));
+}
+
 // 玉の位置とBonaPieceから特徴量のインデックスを求める
 template <Side AssociatedKing>
 inline IndexType HalfKP<AssociatedKing>::MakeIndex(Square sq_k, BonaPiece p) {
@@ -46,6 +51,10 @@ void HalfKP<AssociatedKing>::AppendActiveIndices(
   for (PieceNumber i = PIECE_NUMBER_ZERO; i < PIECE_NUMBER_KING; ++i) {
     active->push_back(MakeIndex(sq_target_k, pieces[i]));
   }
+
+  // perspectiveじゃない方の王を取得
+  const auto opponent_king = GetKingPieceNumber<AssociatedKing>(~perspective);
+  active->push_back(MakeIndex(sq_target_k, pieces[opponent_king]));
 }
 
 // 特徴量のうち、一手前から値が変化したインデックスのリストを取得する
@@ -58,7 +67,10 @@ void HalfKP<AssociatedKing>::AppendChangedIndices(
   GetPieces(pos, perspective, &pieces, &sq_target_k);
   const auto& dp = pos.state()->dirtyPiece;
   for (int i = 0; i < dp.dirty_num; ++i) {
-    if (dp.pieceNo[i] >= PIECE_NUMBER_KING) continue;
+    if (dp.pieceNo[i] == GetKingPieceNumber<AssociatedKing>(perspective)) {
+      // 自分の王は何もしない
+      continue;
+    }
     const auto old_p = static_cast<BonaPiece>(
         dp.changed_piece[i].old_piece.from[perspective]);
     removed->push_back(MakeIndex(sq_target_k, old_p));

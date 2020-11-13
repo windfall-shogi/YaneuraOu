@@ -111,87 +111,64 @@ namespace Eval {
 
 		// --- 手駒
 
-#if defined (EVAL_MATERIAL) || defined (EVAL_KPPT) || defined(EVAL_KPP_KKPT) || defined(EVAL_NNUE)
-		// Apery(WCSC26)方式。0枚目の駒があるので少し隙間がある。
-		// 定数自体は1枚目の駒のindexなので、EVAL_KPPの時と同様の処理で問題ない。
-		// 例)
-		//  f_hand_pawn  = 先手の1枚目の手駒歩
-		//  e_hand_lance = 後手の1枚目の手駒の香
-		// Aperyとは手駒に関してはこの部分の定数の意味が1だけ異なるので注意。
+		// 下位16bitで場所(盤上の位置、持ち駒)と成りと手番について一意な番号。
+		// 上位16bitで駒の種類を識別する。
+		f_pawn = (1 << 16) + 1,
+		f_pro_pawn = f_pawn + 81,
+		e_pawn = f_pro_pawn + 81,
+		e_pro_pawn = e_pawn + 81,
+		f_hand_pawn = e_pro_pawn + 81,
+		e_hand_pawn = f_hand_pawn + 18,
 
-		f_hand_pawn = BONA_PIECE_ZERO + 1,//0//0+1
-		e_hand_pawn = 20,//f_hand_pawn + 19,//19+1
-		f_hand_lance = 39,//e_hand_pawn + 19,//38+1
-		e_hand_lance = 44,//f_hand_lance + 5,//43+1
-		f_hand_knight = 49,//e_hand_lance + 5,//48+1
-		e_hand_knight = 54,//f_hand_knight + 5,//53+1
-		f_hand_silver = 59,//e_hand_knight + 5,//58+1
-		e_hand_silver = 64,//f_hand_silver + 5,//63+1
-		f_hand_gold = 69,//e_hand_silver + 5,//68+1
-		e_hand_gold = 74,//f_hand_gold + 5,//73+1
-		f_hand_bishop = 79,//e_hand_gold + 5,//78+1
-		e_hand_bishop = 82,//f_hand_bishop + 3,//81+1
-		f_hand_rook = 85,//e_hand_bishop + 3,//84+1
-		e_hand_rook = 88,//f_hand_rook + 3,//87+1
-		fe_hand_end = 90,//e_hand_rook + 3,//90
+		f_lance = (2 << 16) + 1,
+		f_pro_lance = f_lance + 81,
+		e_lance = f_pro_lance + 81,
+		e_pro_lance = e_lance + 81,
+		f_hand_lance = e_pro_lance + 81,
+		e_hand_lance = f_hand_lance + 18,	// 歩と下位16bitは共通なので、18になる
 
-#else 
-		fe_hand_end = 0,
-#endif                     
+		f_knight = (3 << 16) + 1,
+		f_pro_knight = f_knight + 81,
+		e_knight = f_pro_knight + 81,
+		e_pro_knight = e_knight + 81,
+		f_hand_knight = e_pro_knight + 81,
+		e_hand_knight = f_hand_knight + 18,
 
-		// Bonanzaのように盤上のありえない升の歩や香の番号を詰めない。
-		// 理由1) 学習のときに相対PPで1段目に香がいるときがあって、それを逆変換において正しく表示するのが難しい。
-		// 理由2) 縦型BitboardだとSquareからの変換に困る。
+		f_silver = (4 << 16) + 1,
+		f_pro_silver = f_silver + 81,
+		e_silver = f_pro_silver + 81,
+		e_pro_silver = e_silver + 81,
+		f_hand_silver = e_pro_silver + 81,
+		e_hand_silver = f_hand_silver + 18,
 
-		// --- 盤上の駒
-		f_pawn = fe_hand_end,
-		e_pawn = f_pawn + 81,
-		f_lance = e_pawn + 81,
-		e_lance = f_lance + 81,
-		f_knight = e_lance + 81,
-		e_knight = f_knight + 81,
-		f_silver = e_knight + 81,
-		e_silver = f_silver + 81,
-		f_gold = e_silver + 81,
-		e_gold = f_gold + 81,
-		f_bishop = e_gold + 81,
-		e_bishop = f_bishop + 81,
-		f_horse = e_bishop + 81,
-		e_horse = f_horse + 81,
-		f_rook = e_horse + 81,
-		e_rook = f_rook + 81,
-		f_dragon = e_rook + 81,
-		e_dragon = f_dragon + 81,
-		fe_old_end = e_dragon + 81,
+		// Pieceの順序と違うとややこしいので角を先に定義する
+		f_bishop = (5 << 16) + 1,
+		f_horse = f_bishop + 81,
+		e_bishop = f_horse + 81,
+		e_horse = e_bishop + 81,
+		f_hand_bishop = e_horse + 81,
+		e_hand_bishop = f_hand_bishop + 18,
 
-		// === 以下、拡張領域 ===
+		f_rook = (6<< 16) + 1,
+		f_dragon = f_rook + 81,
+		e_rook = f_dragon + 81,
+		e_dragon = e_rook + 81,
+		f_hand_rook = e_dragon + 81,
+		e_hand_rook = f_hand_rook + 18,
 
-		// 金と小駒の成り駒を区別する
-#if defined(DISTINGUISH_GOLDS)
-		f_pro_pawn = fe_old_end,
-		e_pro_pawn = f_pro_pawn + 81,
-		f_pro_lance = e_pro_pawn + 81,
-		e_pro_lance = f_pro_lance + 81,
-		f_pro_knight = e_pro_lance + 81,
-		e_pro_knight = f_pro_knight + 81,
-		f_pro_silver = e_pro_knight + 81,
-		e_pro_silver = f_pro_silver + 81,
-		fe_new_end = e_pro_silver + 81,
-#else
-		fe_new_end = fe_old_end,
-#endif
+		// Pieceと同じ順序
+		f_gold = (7 << 16) + 1,
+		e_gold = f_gold + 81 * 2,
+		f_hand_gold = e_gold + 81 * 2,
+		e_hand_gold = f_hand_gold + 18,
 
-		fe_end = fe_new_end,
+		f_king = (8 << 16) + 1,
+		e_king = f_king + 81 * 2,
 
-		// fe_end がKPP配列などのPの値の終端と考えられる。
-		// 例) kpp[SQ_NB][fe_end][fe_end];
 
-		// 王も一意な駒番号を付与。これは2駒関係をするときに王に一意な番号が必要なための拡張
-		f_king = fe_end,
-		e_king = f_king + SQ_NB,
-		fe_end2 = e_king + SQ_NB, // 玉も含めた末尾の番号。
-
-		// 末尾は評価関数の性質によって異なるので、BONA_PIECE_NBを定義するわけにはいかない。
+		// 配列のサイズ
+		fe_hand_end = 18 * 2 * 2 + 18 + 4,
+		fe_end = 81 * 4 + 18 * 2 + 1
 	};
 
 	// BonaPieceの内容を表示する。手駒ならH,盤上の駒なら升目。例) HP3 (3枚目の手駒の歩)
@@ -259,7 +236,7 @@ namespace Eval {
 		}
 
 		// あるBonaPieceに対応するPieceNumberを返す。
-		PieceNumber piece_no_of_hand(BonaPiece bp) const { return piece_no_list_hand[bp]; }
+		PieceNumber piece_no_of_hand(BonaPiece bp) const { return piece_no_list_hand[ConvertIndex(bp)]; }
 		// 盤上のある升sqに対応するPieceNumberを返す。
 		PieceNumber piece_no_of_board(Square sq) const { return piece_no_list_board[sq]; }
 #endif
@@ -309,7 +286,7 @@ namespace Eval {
 			ASSERT_LV3(is_ok(piece_no));
 			pieceListFb[piece_no] = fb;
 			pieceListFw[piece_no] = fw;
-			piece_no_list_hand[fb] = piece_no;
+			piece_no_list_hand[ConvertIndex(fb)] = piece_no;
 		}
 #endif
 
@@ -319,7 +296,7 @@ namespace Eval {
 #if defined(USE_FV38)
 		// 38固定
 	public:
-		int length() const { return PIECE_NUMBER_KING; }
+		int length() const { return PIECE_NUMBER_KING + 1; }
 
 		// VPGATHERDDを使う都合、4の倍数でなければならない。
 		// また、KPPT型評価関数などは、39,40番目の要素がゼロであることを前提とした
@@ -341,6 +318,20 @@ namespace Eval {
 		BonaPiece pieceListFw[MAX_LENGTH];
 
 #endif
+
+		static constexpr int offset[PIECE_HAND_NB] = {
+        0,
+        81 * 4 + 1,                // FU
+        81 * 4 + 1 - 18 * 2,       // KY
+        81 * 4 + 1 - 18 * 2 - 4,   // KE
+        81 * 4 + 1 - 18 * 2 - 8,   // GI
+        81 * 4 + 1 - 18 * 2 - 12,  // KA
+        81 * 4 + 1 - 18 * 2 - 14,  // HI
+        81 * 4 + 1 - 18 * 2 * 2    // KI
+    };
+		static constexpr int ConvertIndex(const BonaPiece bp) {
+			return (bp & 0xFFFF) - offset[bp >> 16];
+		}
 
 #if defined(USE_FV38)
 		// 手駒である、任意のBonaPieceに対して、その駒番号(PieceNumber)を保持している配列
