@@ -73,7 +73,7 @@ class Trainer<FeatureTransformer> {
     std::fill(std::begin(weights_), std::end(weights_), +kZero);
     const double kSigma = 0.1 / std::sqrt(RawFeatures::kMaxActiveDimensions);
     auto distribution = std::normal_distribution<double>(0.0, kSigma);
-    for (IndexType i = 0; i < kHalfDimensions * RawFeatures::kDimensions; ++i) {
+    for (IndexType i = 0; i < kHalfDimensions * RawFeatures::kDimensions / 8; ++i) {
       const auto weight = static_cast<LearnFloatType>(distribution(rng));
       weights_[i] = weight;
     }
@@ -90,6 +90,7 @@ class Trainer<FeatureTransformer> {
       gradients_.resize(kOutputDimensions * batch.size());
     }
     batch_ = &batch;
+    static constexpr IndexType kSections = kHalfDimensions / 8;
     // affine transform
 #pragma omp parallel for
     for (IndexType b = 0; b < batch.size(); ++b) {
@@ -99,9 +100,12 @@ class Trainer<FeatureTransformer> {
 #if defined(USE_BLAS)
         cblas_scopy(kHalfDimensions, biases_, 1, &output_[output_offset], 1);
         for (const auto& feature : batch[b].training_features[c]) {
-          const IndexType weights_offset = kHalfDimensions * feature.GetIndex();
-          cblas_saxpy(kHalfDimensions, (float)feature.GetCount(),
-                      &weights_[weights_offset], 1, &output_[output_offset], 1);
+          const auto piece_type = feature.GetIndex() >> 16;
+          const auto index = feature.GetIndex() & 0xFFFF;
+
+          const IndexType weights_offset = kSections * index;
+          cblas_saxpy(kSections, (float)feature.GetCount(),
+                      &weights_[weights_offset], 1, &output_[output_offset + (piece_type - 1) * kSections], 1);
         }
 #else
         for (IndexType i = 0; i < kHalfDimensions; ++i) {
@@ -117,11 +121,14 @@ class Trainer<FeatureTransformer> {
 #endif
       }
     }
+    static constexpr LearnFloatType scale[] = { 16,4,4,4,2,2,4,1 };
     // clipped ReLU
     for (IndexType b = 0; b < batch.size(); ++b) {
       const IndexType batch_offset = kOutputDimensions * b;
       for (IndexType i = 0; i < kOutputDimensions; ++i) {
         const IndexType index = batch_offset + i;
+        output_[index] /= scale[(i % kHalfDimensions) / kSections];
+
         min_pre_activation_ = std::min(min_pre_activation_, output_[index]);
         max_pre_activation_ = std::max(max_pre_activation_, output_[index]);
         output_[index] = std::max(+kZero, std::min(+kOne, output_[index]));
@@ -162,6 +169,9 @@ class Trainer<FeatureTransformer> {
     }
     cblas_saxpy(kHalfDimensions, -local_learning_rate,
                 biases_diff_, 1, biases_, 1);
+
+    static constexpr LearnFloatType scales[] = { 16,4,4,4,2,2,4,1 };
+    static constexpr auto kNumSections = kHalfDimensions / 8;
 #pragma omp parallel
     {
 #if defined(_OPENMP)
@@ -176,12 +186,13 @@ class Trainer<FeatureTransformer> {
 #if defined(_OPENMP)
             if (feature.GetIndex() % num_threads != thread_index) continue;
 #endif
+            const auto piece_type = feature.GetIndex() >> 16;
             const IndexType weights_offset =
-                kHalfDimensions * feature.GetIndex();
+                kNumSections * (feature.GetIndex() & 0xFFFF);
             const auto scale = static_cast<LearnFloatType>(
                 effective_learning_rate / feature.GetCount());
-            cblas_saxpy(kHalfDimensions, -scale,
-                        &gradients_[output_offset], 1,
+            cblas_saxpy(kNumSections, -scale / scales[piece_type - 1],
+                        &gradients_[output_offset + kNumSections * (piece_type - 1)], 1,
                         &weights_[weights_offset], 1);
           }
         }
@@ -222,7 +233,7 @@ class Trainer<FeatureTransformer> {
     for (IndexType b = 0; b < batch_->size(); ++b) {
       for (IndexType c = 0; c < 2; ++c) {
         for (const auto& feature : (*batch_)[b].training_features[c]) {
-          observed_features.set(feature.GetIndex());
+          observed_features.set(feature.GetIndex() & 0xFFFF);
         }
       }
     }
@@ -253,18 +264,19 @@ class Trainer<FeatureTransformer> {
       target_layer_->biases_[i] =
           Round<typename LayerType::BiasType>(biases_[i] * kBiasScale);
     }
+    static constexpr auto kNumSections = kHalfDimensions / 8;
     std::vector<TrainingFeature> training_features;
 #pragma omp parallel for private(training_features)
     for (IndexType j = 0; j < RawFeatures::kDimensions; ++j) {
       training_features.clear();
       Features::Factorizer<RawFeatures>::AppendTrainingFeatures(
           j, &training_features);
-      for (IndexType i = 0; i < kHalfDimensions; ++i) {
+      for (IndexType i = 0; i < kNumSections; ++i) {
         double sum = 0.0;
         for (const auto& feature : training_features) {
-          sum += weights_[kHalfDimensions * feature.GetIndex() + i];
+          sum += weights_[kNumSections * (feature.GetIndex() & 0xFFFF) + i];
         }
-        target_layer_->weights_[kHalfDimensions * j + i] =
+        target_layer_->weights_[kNumSections * j + i] =
             Round<typename LayerType::WeightType>(sum * kWeightScale);
       }
     }
@@ -277,7 +289,7 @@ class Trainer<FeatureTransformer> {
           target_layer_->biases_[i] / kBiasScale);
     }
     std::fill(std::begin(weights_), std::end(weights_), +kZero);
-    for (IndexType i = 0; i < kHalfDimensions * RawFeatures::kDimensions; ++i) {
+    for (IndexType i = 0; i < kHalfDimensions * RawFeatures::kDimensions / 8; ++i) {
       weights_[i] = static_cast<LearnFloatType>(
           target_layer_->weights_[i] / kWeightScale);
     }
@@ -286,10 +298,11 @@ class Trainer<FeatureTransformer> {
 
   // 学習データに出現していない特徴量に対応する重みを0にする
   void ClearUnobservedFeatureWeights() {
+    static constexpr auto kNumSections = kHalfDimensions / 8;
     for (IndexType i = 0; i < kInputDimensions; ++i) {
       if (!observed_features.test(i)) {
-        std::fill(std::begin(weights_) + kHalfDimensions * i,
-                  std::begin(weights_) + kHalfDimensions * (i + 1), +kZero);
+        std::fill(std::begin(weights_) + kNumSections * i,
+                  std::begin(weights_) + kNumSections * (i + 1), +kZero);
       }
     }
     QuantizeParameters();
@@ -347,7 +360,7 @@ class Trainer<FeatureTransformer> {
   // パラメータ
   alignas(kCacheLineSize) LearnFloatType biases_[kHalfDimensions];
   alignas(kCacheLineSize)
-      LearnFloatType weights_[kHalfDimensions * kInputDimensions];
+      LearnFloatType weights_[kHalfDimensions * kInputDimensions / 8];
 
   // パラメータの更新で用いるバッファ
   LearnFloatType biases_diff_[kHalfDimensions];
