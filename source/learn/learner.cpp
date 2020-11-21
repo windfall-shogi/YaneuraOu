@@ -16,6 +16,9 @@
 // etc..
 
 #if defined(EVAL_LEARN)
+#if defined(USE_LIBTORCH)
+#include <torch/torch.h>
+#endif // defined(USE_LIBTORCH)
 
 #include "learn.h"
 
@@ -2157,6 +2160,32 @@ bool LearnerThink::save(bool is_final)
 	}
 	return false;
 }
+
+#if defined(USE_LIBTORCH)
+//! LearnerThinkのlibtorch版
+struct LearnerThinkTorch : public MultiThink {
+	LearnerThinkTorch(SfenReader& sr_) : sr(sr_), stop_flag(false), save_only_once(false) {
+		// 
+	}
+
+	virtual void thread_worker(size_t thread_id);
+
+	// sfenの読み出し器
+	SfenReader& sr;
+
+	bool stop_flag;
+
+	// 評価関数の保存するときに都度フォルダを掘るかのフラグ。
+	// trueだとフォルダを掘らない。
+	bool save_only_once;
+
+	TaskDispatcher task_dispatcher;
+};
+
+void LearnerThinkTorch::thread_worker(size_t thread_id) {
+
+}
+#endif // defined(USE_LIBTORCH)
 
 // shuffle_files() , shuffle_files_quick()の下請けで、書き出し部分。
 // output_file_name : 書き出すファイル名
