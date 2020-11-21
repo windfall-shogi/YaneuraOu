@@ -199,15 +199,15 @@ class FeatureTransformer {
         for (const auto index : active_indices[perspective]) {
           const auto piece_type = index >> 16;
 
-          static constexpr int kNumSections = kHalfDimensions / 8;
-          static_assert(kNumSections * 8 == kHalfDimensions, "");
+          static constexpr int kSectionDimensions = kHalfDimensions / 8;
+          static_assert(kSectionDimensions * 8 == kHalfDimensions, "");
 
-          const IndexType offset = kNumSections * (index & 0xFFFF);
+          const IndexType offset = kSectionDimensions * (index & 0xFFFF);
 #if defined(USE_AVX2)
           auto accumulation = reinterpret_cast<__m256i*>(
               &accumulator.accumulation[perspective][i][0]);
           auto column = reinterpret_cast<const __m256i*>(&weights_[offset]);
-          constexpr IndexType kNumChunks = kNumSections / (kSimdWidth / 2);
+          constexpr IndexType kNumChunks = kSectionDimensions / (kSimdWidth / 2);
           for (IndexType j = 0; j < kNumChunks; ++j) {
             const auto k = (piece_type - 1) * kNumChunks + j;
             accumulation[k] = _mm256_add_epi16(accumulation[k], column[j]);
@@ -253,11 +253,11 @@ class FeatureTransformer {
       RawFeatures::AppendChangedIndices(pos, kRefreshTriggers[i],
                                         removed_indices, added_indices, reset);
       for (const auto perspective : COLOR) {
-        static constexpr int kNumSections = kHalfDimensions / 8;
-        static_assert(kNumSections * 8 == kHalfDimensions, "");
+        static constexpr int kSectionDimensions = kHalfDimensions / 8;
+        static_assert(kSectionDimensions * 8 == kHalfDimensions, "");
 
 #if defined(USE_AVX2)
-        constexpr IndexType kNumChunks = kNumSections / (kSimdWidth / 2);
+        constexpr IndexType kNumChunks = kSectionDimensions / (kSimdWidth / 2);
         auto accumulation = reinterpret_cast<__m256i*>(
             &accumulator.accumulation[perspective][i][0]);
 #elif defined(USE_SSE2)
@@ -284,7 +284,7 @@ class FeatureTransformer {
           for (const auto index : removed_indices[perspective]) {
             const auto piece_type = index >> 16;
 
-            const IndexType offset = kNumSections * (index & 0xFFFF);
+            const IndexType offset = kSectionDimensions * (index & 0xFFFF);
 #if defined(USE_AVX2)
             auto column = reinterpret_cast<const __m256i*>(&weights_[offset]);
             for (IndexType j = 0; j < kNumChunks; ++j) {
@@ -315,7 +315,7 @@ class FeatureTransformer {
           for (const auto index : added_indices[perspective]) {
             const auto piece_type = index >> 16;
 
-            const IndexType offset = kNumSections * (index & 0xFFFF);
+            const IndexType offset = kSectionDimensions * (index & 0xFFFF);
 #if defined(USE_AVX2)
             auto column = reinterpret_cast<const __m256i*>(&weights_[offset]);
             for (IndexType j = 0; j < kNumChunks; ++j) {
