@@ -239,3 +239,11 @@ FakesAssemblies/
 GeneratedArtifacts/
 _Pvt_Extensions/
 ModelManifest.xml
+
+externals/*
+*.bin
+
+# sourcetrail
+*.srctrlbm
+*.srctrldb
+*.srctrlprj
