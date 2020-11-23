@@ -18,7 +18,7 @@
 #if defined(EVAL_LEARN)
 #if defined(USE_LIBTORCH)
 #pragma warning(push)
-#pragma warning(disable : 4101 4244 4251 4267 4275 4819 26110 26812 26819 26439 26495 26817)
+#pragma warning(disable : 4101 4244 4251 4267 4275 4819 26110 26812 26819 26439 26444 26451 26495 26817)
 #define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
 #include <torch/torch.h>
 #pragma warning(pop)
@@ -2191,8 +2191,6 @@ struct LearnerThinkTorch : public MultiThink {
 	// ミニバッチサイズのサイズ。必ずこのclassを使う側で設定すること。
 	u64 mini_batch_size = 1000 * 1000;
 
-	bool stop_flag;
-
 	// 割引率
 	double discount_rate;
 
@@ -2440,8 +2438,8 @@ void LearnerThinkTorch::thread_worker(size_t thread_id) {
 			// discount_rateが0のときはこの処理は行わない。
 			if (discount_rate != 0) {
 				// 途中の局面をここで追加する
-
-				//pos_add_grad();
+				Eval::NNUE::AddExampleTorch(pos, rootColor, ps, discount_rate);
+				++sr.total_done;
 			}
 
 			pos.do_move(m, state[ply++]);
@@ -2451,6 +2449,8 @@ void LearnerThinkTorch::thread_worker(size_t thread_id) {
 		}
 
 		// 末端の局面を追加
+		Eval::NNUE::AddExampleTorch(pos, rootColor, ps, 1.0);
+		++sr.total_done;
 
 		// 局面を巻き戻す
 		for (auto it = pv.rbegin(); it != pv.rend(); ++it)
