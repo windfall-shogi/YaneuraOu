@@ -17,7 +17,11 @@
 
 #if defined(EVAL_LEARN)
 #if defined(USE_LIBTORCH)
+#pragma warning(push)
+#pragma warning(disable : 4101 4244 4251 4267 4275 4819 26110 26812 26819 26439 26495 26817)
+#define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
 #include <torch/torch.h>
+#pragma warning(pop)
 #endif // defined(USE_LIBTORCH)
 
 #include "learn.h"
@@ -2170,20 +2174,292 @@ struct LearnerThinkTorch : public MultiThink {
 
 	virtual void thread_worker(size_t thread_id);
 
+	// 評価関数パラメーターをファイルに保存
+	bool save(bool is_final = false);
+
 	// sfenの読み出し器
 	SfenReader& sr;
 
 	bool stop_flag;
 
+	// 学習の反復回数のカウンター
+	u64 epoch = 0;
+
+	// ミニバッチサイズのサイズ。必ずこのclassを使う側で設定すること。
+	u64 mini_batch_size = 1000 * 1000;
+
+	bool stop_flag;
+
+	// 割引率
+	double discount_rate;
+
+	// 序盤を学習対象から外すオプション
+	int reduction_gameply;
+
+	// 教師局面の深い探索の評価値の絶対値がこの値を超えていたらその教師局面を捨てる。
+	int eval_limit;
+
 	// 評価関数の保存するときに都度フォルダを掘るかのフラグ。
 	// trueだとフォルダを掘らない。
 	bool save_only_once;
+
+#if defined(EVAL_NNUE)
+	shared_timed_mutex nn_mutex;
+	double newbob_scale;
+	double newbob_decay;
+	int newbob_num_trials;
+	double best_loss;
+	double latest_loss_sum;
+	u64 latest_loss_count;
+	std::string best_nn_directory;
+#endif
+
+	u64 eval_save_interval;
+	u64 loss_output_interval;
+	u64 mirror_percentage;
 
 	TaskDispatcher task_dispatcher;
 };
 
 void LearnerThinkTorch::thread_worker(size_t thread_id) {
+	auto th = Threads[thread_id];
+	auto& pos = th->rootPos;
 
+	// qsearch()を呼び出した回数。
+	// ある程度呼び出すと置換表が汚れてくると思うので、クリアする。
+	// 置換表は、自分のスレッド用の置換表が用意されている。(Thread.tt)
+	u64 qsearch_count = 0;
+
+	while (true) {
+#if defined(EVAL_NNUE)
+		// 更新中に評価関数を使わないようにロックする。
+		shared_lock<shared_timed_mutex> read_lock(nn_mutex, defer_lock);
+		if (sr.next_update_weights <= sr.total_done ||
+			(thread_id != 0 && !read_lock.try_lock()))
+#else
+		if (sr.next_update_weights <= sr.total_done)
+#endif
+		{
+			if (thread_id!=0)
+			{
+				// thread_id == 0以外は、待機。
+
+				if (stop_flag) {
+					break;
+				}
+				// rmseの計算などを並列化したいのでtask()が積まれていればそれを処理する。
+				task_dispatcher.on_idle(thread_id);
+				continue;
+			} 
+			else
+			{
+				// thread_id == 0だけが以下の更新処理を行なう。
+
+				// 初回はweight配列の更新は行わない。
+				if (sr.next_update_weights == 0)
+				{
+					sr.next_update_weights += mini_batch_size;
+					continue;
+				}
+				{
+					// パラメータの更新
+
+					// 更新中に評価関数を使わないようにロックする。
+					lock_guard<shared_timed_mutex> write_lock(nn_mutex);
+					// Eval::NNUE::UpdateParameters(epoch);
+				}
+
+				++epoch;
+
+				// 10億局面ごとに1回保存、ぐらいの感じで。
+
+				// ただし、update_weights(),calc_rmse()している間の時間経過は無視するものとする。
+				if (++sr.save_count * mini_batch_size >= eval_save_interval)
+				{
+					sr.save_count = 0;
+
+					// この間、gradientの計算が進むと値が大きくなりすぎて困る気がするので他のスレッドを停止させる。
+					const bool converged = save();
+					if (converged)
+					{
+						stop_flag = true;
+						sr.stop_flag = true;
+						break;
+					}
+				}
+
+				// rmseを計算する。1万局面のサンプルに対して行う。
+// 40コアでやると100万局面ごとにupdate_weightsするとして、特定のスレッドが
+// つきっきりになってしまうのあまりよくないような気も…。
+				static u64 loss_output_count = 0;
+				if (++loss_output_count * mini_batch_size >= loss_output_interval)
+				{
+					loss_output_count = 0;
+
+					// 今回処理した件数
+					u64 done = sr.total_done - sr.last_done;
+
+					// lossの計算
+					// calc_loss(thread_id, done);
+
+#if defined(EVAL_NNUE)
+					Eval::NNUE::CheckHealth();
+#endif
+
+					// どこまで集計したかを記録しておく。
+					sr.last_done = sr.total_done;
+				}
+
+				// 次回、この一連の処理は、次回、mini_batch_sizeだけ処理したときに再度やって欲しい。
+				sr.next_update_weights += mini_batch_size;
+
+				// main thread以外は、このsr.next_update_weightsの更新を待っていたので
+				// この値が更新されると再度動き始める。				
+			}
+		}
+
+		PackedSfenValue ps;
+	RetryRead:;
+		if (!sr.read_to_thread_buffer(thread_id, ps))
+		{
+			// 自分のスレッド用の局面poolを使い尽くした。
+			// 局面がもうほとんど残っていないということだから、
+			// 他のスレッドもすべて終了させる。
+
+			stop_flag = true;
+			break;
+		}
+
+		// 評価値が学習対象の値を超えている。
+		// この局面情報を無視する。
+		if (eval_limit < abs(ps.score) || abs(ps.score) == VALUE_SUPERIOR)
+			goto RetryRead;
+
+#if !defined (LEARN_GENSFEN_USE_DRAW_RESULT)
+		if (ps.game_result == 0)
+			goto RetryRead;
+#endif
+
+		// 序盤局面に関する読み飛ばし
+		if (ps.gamePly < prng.rand(reduction_gameply))
+			goto RetryRead;
+
+		StateInfo si;
+		const bool mirror = prng.rand(100) < mirror_percentage;
+		if (pos.set_from_packed_sfen(ps.sfen, &si, th, mirror).is_not_ok())
+		{
+			// 変なsfenを掴かまされた。デバッグすべき！
+			// 不正なsfenなのでpos.sfen()で表示できるとは限らないが、しないよりマシ。
+			cout << "Error! : illigal packed sfen = " << pos.sfen() << endl;
+			goto RetryRead;
+		}
+
+#if !defined(EVAL_NNUE)
+		{
+			auto key = pos.key();
+			// rmseの計算用に使っている局面なら除外する。
+			if (sr.is_for_rmse(key))
+				goto RetryRead;
+
+			// 直近で用いた局面も除外する。
+			auto hash_index = size_t(key & (sr.READ_SFEN_HASH_SIZE - 1));
+			auto key2 = sr.hash[hash_index];
+			if (key == key2)
+				goto RetryRead;
+			sr.hash[hash_index] = key; // 今回のkeyに入れ替えておく。
+		}
+#endif
+
+		// 全駒されて詰んでいる可能性がある。
+		// また宣言勝ちの局面はPVの指し手でleafに行けないので学習から除外しておく。
+		// (そのような教師局面自体を書き出すべきではないのだが古い生成ルーチンで書き出しているかも知れないので)
+		if (pos.is_mated() || pos.DeclarationWin() != MOVE_NONE)
+			goto RetryRead;
+
+		// 浅い探索(qsearch)の評価値
+		auto r = qsearch(pos);
+
+		if ((++qsearch_count % 1000) == 0)
+		{
+			// qsearch()を1000回呼び出すごとに置換表をクリアする。
+			// qsearch()で汚れる置換表はたかだか知れてるとは思うが、
+			// 定期的にクリアはしたほうが良いと思われる。
+			th->tt.clear();
+		}
+
+		auto pv = r.second;
+
+		// 深い探索の評価値
+		auto deep_value = (Value)ps.score;
+
+		// mini batchのほうが勾配が出ていいような気がする。
+		// このままleaf nodeに行って、勾配配列にだけ足しておき、あとでrmseの集計のときにAdaGradしてみる。
+
+		auto rootColor = pos.side_to_move();
+
+		// PVの初手が異なる場合は学習に用いないほうが良いのでは…。
+		// 全然違うところを探索した結果だとそれがノイズに成りかねない。
+		// 評価値の差が大きすぎるところも学習対象としないほうがいいかも…。
+
+#if 0
+		// これやると13%程度の局面が学習対象から外れてしまう。善悪は微妙。
+		if (pv.size() >= 1 && (u16)pv[0] != ps.move)
+		{
+			//			dbg_hit_on(false);
+			continue;
+		}
+#endif
+
+#if 0
+		// 評価値の差が大きすぎるところも学習対象としないほうがいいかも…。
+		// →　勝率の関数を通すのでまあいいか…。30%ぐらいの局面が学習対象から外れてしまうしな…。
+		if (abs((s16)r.first - ps.score) >= Eval::PawnValue * 4)
+		{
+			//			dbg_hit_on(false);
+			continue;
+		}
+		//		dbg_hit_on(true);
+#endif
+
+		int ply = 0;
+
+		StateInfo state[MAX_PLY]; // qsearchのPVがそんなに長くなることはありえない。
+		for (auto m : pv)
+		{
+			// 非合法手はやってこないはずなのだが。
+			if (!pos.pseudo_legal(m) || !pos.legal(m))
+			{
+				cout << pos << m << endl;
+				ASSERT_LV3(false);
+			}
+
+			// 各PV上のnodeでも勾配を加算する場合の処理。
+			// discount_rateが0のときはこの処理は行わない。
+			if (discount_rate != 0) {
+				// 途中の局面をここで追加する
+
+				//pos_add_grad();
+			}
+
+			pos.do_move(m, state[ply++]);
+
+			// leafでのevaluateの値を用いるので差分更新していく。
+			Eval::evaluate_with_no_return(pos);
+		}
+
+		// 末端の局面を追加
+
+		// 局面を巻き戻す
+		for (auto it = pv.rbegin(); it != pv.rend(); ++it)
+			pos.undo_move(*it);
+
+#if 0
+		// rootの局面にも勾配を加算する場合
+		shallow_value = (rootColor == pos.side_to_move()) ? Eval::evaluate(pos) : -Eval::evaluate(pos);
+		dj_dw = calc_grad(deep_value, shallow_value, ps);
+		Eval::add_grad(pos, rootColor, dj_dw, without_kpp);
+#endif
+	}
 }
 #endif // defined(USE_LIBTORCH)
 
