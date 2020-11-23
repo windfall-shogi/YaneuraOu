@@ -36,6 +36,11 @@ namespace {
 
 // 学習データ
 std::vector<Example> examples;
+#if defined(USE_LIBTORCH)
+//! libtorchに入力できるようにした学習データ
+BatchExample torch_examples;
+#endif // defined(USE_LIBTORCH)
+
 
 // examplesの排他制御をするMutex
 std::mutex examples_mutex;
@@ -164,6 +169,35 @@ void AddExample(Position& pos, Color rootColor,
   std::lock_guard<std::mutex> lock(examples_mutex);
   examples.push_back(std::move(example));
 }
+
+#if defined(USE_LIBTORCH)
+void AddExampleTorch(Position& pos, Color rootColor,
+                     const Learner::PackedSfenValue& psv, double weight) {
+  Features::IndexList active_indices[2];
+  for (const auto trigger : kRefreshTriggers) {
+    RawFeatures::AppendActiveIndices(pos, trigger, active_indices);
+  }
+
+  const Color perspectives[2] = {pos.side_to_move(), ~pos.side_to_move()};
+
+  // 入力の次元数は一定である必要があるので、
+  // 同じインデックスが複数回にわたって登場してもまとめられない
+
+  std::lock_guard<std::mutex> lock(examples_mutex);
+  for (int i = 0; i < 2; ++i) {
+    const auto& indices = active_indices[perspectives[i]];
+    std::copy(indices.begin(), indices.end(),
+              std::back_inserter(torch_examples.training_feature_indices[i]));
+  }
+  if (rootColor == pos.side_to_move()) {
+    torch_examples.signs.push_back(1);
+  } else {
+    torch_examples.signs.push_back(-1);
+  }
+  torch_examples.psvs.push_back(psv);
+  torch_examples.weights.push_back(weight);
+}
+#endif // defined(USE_LIBTORCH)
 
 // 評価関数パラメーターを更新する
 void UpdateParameters(u64 epoch) {
