@@ -277,6 +277,9 @@
     <ClInclude Include="book\book.h">
       <Filter>リソース ファイル\book</Filter>
     </ClInclude>
+    <ClInclude Include="eval\nnue\evaluate_nnue_torch_model.h">
+      <Filter>リソース ファイル\eval\nnue</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="movegen.cpp">

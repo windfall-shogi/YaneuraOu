@@ -28,6 +28,18 @@
 #include "trainer/trainer_clipped_relu.h"
 #include "trainer/trainer_sum.h"
 
+#if defined(USE_LIBTORCH)
+#include "evaluate_nnue_torch_model.h"
+#endif // defined(USE_LIBTORCH)
+
+#if defined(USE_LIBTORCH)
+namespace Learner {
+// learner.cppの方で定義している
+// elmo絞りのlambdaを取得する関数
+torch::Tensor GetLambda(const torch::Tensor& deep);
+}
+#endif // defined(USE_LIBTORCH)
+
 namespace Eval {
 
 namespace NNUE {
@@ -53,6 +65,12 @@ std::mt19937 rng;
 
 // 学習器
 std::shared_ptr<Trainer<Network>> trainer;
+#if defined(USE_LIBTORCH)
+// libtorchで作った学習用のモデル
+Net net;
+torch::optim::SGD optimizer(net->parameters(), 0.01);
+#endif // defined(USE_LIBTORCH)
+
 
 // 学習率のスケール
 double global_learning_rate_scale;
@@ -170,35 +188,6 @@ void AddExample(Position& pos, Color rootColor,
   examples.push_back(std::move(example));
 }
 
-#if defined(USE_LIBTORCH)
-void AddExampleTorch(Position& pos, Color rootColor,
-                     const Learner::PackedSfenValue& psv, double weight) {
-  Features::IndexList active_indices[2];
-  for (const auto trigger : kRefreshTriggers) {
-    RawFeatures::AppendActiveIndices(pos, trigger, active_indices);
-  }
-
-  const Color perspectives[2] = {pos.side_to_move(), ~pos.side_to_move()};
-
-  // 入力の次元数は一定である必要があるので、
-  // 同じインデックスが複数回にわたって登場してもまとめられない
-
-  std::lock_guard<std::mutex> lock(examples_mutex);
-  for (int i = 0; i < 2; ++i) {
-    const auto& indices = active_indices[perspectives[i]];
-    std::copy(indices.begin(), indices.end(),
-              std::back_inserter(torch_examples.training_feature_indices[i]));
-  }
-  if (rootColor == pos.side_to_move()) {
-    torch_examples.signs.push_back(1);
-  } else {
-    torch_examples.signs.push_back(-1);
-  }
-  torch_examples.psvs.push_back(psv);
-  torch_examples.weights.push_back(weight);
-}
-#endif // defined(USE_LIBTORCH)
-
 // 評価関数パラメーターを更新する
 void UpdateParameters(u64 epoch) {
   ASSERT_LV3(batch_size > 0);
@@ -267,6 +256,125 @@ void save_eval(std::string dir_name) {
 double get_eta() {
   return NNUE::GetGlobalLearningRateScale() * EvalLearningTools::Weight::eta;
 }
+
+#if defined(USE_LIBTORCH)
+namespace NNUE {
+void AddExampleTorch(Position& pos, Color rootColor,
+                     const Learner::PackedSfenValue& psv, double weight) {
+  Features::IndexList active_indices[2];
+  for (const auto trigger : kRefreshTriggers) {
+    RawFeatures::AppendActiveIndices(pos, trigger, active_indices);
+  }
+
+  const Color perspectives[2] = {pos.side_to_move(), ~pos.side_to_move()};
+
+  // 入力の次元数は一定である必要があるので、
+  // 同じインデックスが複数回にわたって登場してもまとめられない
+
+  std::lock_guard<std::mutex> lock(examples_mutex);
+  for (int i = 0; i < 2; ++i) {
+    const auto& indices = active_indices[perspectives[i]];
+    std::copy(indices.begin(), indices.end(),
+              std::back_inserter(torch_examples.training_feature_indices[i]));
+  }
+  if (rootColor == pos.side_to_move()) {
+    torch_examples.signs.push_back(1);
+  } else {
+    torch_examples.signs.push_back(-1);
+  }
+  torch_examples.psvs.push_back(psv);
+  torch_examples.weights.push_back(weight);
+}
+
+void UpdateParametersTorch(u64 epoch) {
+  ASSERT_LV3(batch_size > 0);
+
+  EvalLearningTools::Weight::calc_eta(epoch);
+  const auto new_lr = static_cast<LearnFloatType>(get_eta() / batch_size);
+
+  // 学習係数の変更方法
+  // https://stackoverflow.com/questions/62415285/updating-learning-rate-with-libtorch-1-5-and-optimiser-options-in-c
+  for (auto param_group : optimizer.param_groups()) {
+    // Static cast needed as options() returns OptimizerOptions(base class)
+    static_cast<torch::optim::AdamOptions&>(param_group.options()).lr(new_lr);
+  }
+
+  std::lock_guard<std::mutex> lock(examples_mutex);
+  std::shuffle(examples.begin(), examples.end(), rng);
+
+  const auto data_size = batch_size * RawFeatures::kMaxActiveDimensions;
+  std::vector<int32_t> indices[2];
+  for (int i = 0; i < 2; ++i) {
+    indices[i].reserve(data_size);
+  }
+  std::vector<LearnFloatType> weights(batch_size);
+  std::vector<LearnFloatType> signs(batch_size);
+  std::vector<LearnFloatType> target_values(batch_size);
+  std::vector<LearnFloatType> game_results(batch_size);
+
+  while (examples.size() >= batch_size) {
+    indices[0].clear();
+    indices[1].clear();
+    weights.clear();
+    signs.clear();
+    target_values.clear();
+    game_results.clear();
+
+    // サンプルごとに独立のデータを連続な配列に入れ直す
+    for (auto it = examples.end() - batch_size; it != examples.end(); ++it) {
+      for (int i = 0; i < 2; ++i) {
+        for (const auto feature : it->training_features[i]) {
+          const auto index = feature.GetIndex();
+          const auto count = feature.GetCount();
+          for (int j = 0; j < count; ++j) {
+            indices[i].push_back(index);
+          }
+        }
+      }
+      weights.push_back(it->weight);
+      signs.push_back(it->sign);
+      target_values.push_back(it->psv.score);
+      game_results.push_back(it->psv.game_result);
+    }
+    examples.resize(examples.size() - batch_size);
+
+    torch::Tensor p = torch::from_blob(
+        indices[0].data(),
+        {static_cast<int>(batch_size), RawFeatures::kMaxActiveDimensions},
+        torch::TensorOptions(torch::kI32));
+    torch::Tensor q = torch::from_blob(
+        indices[1].data(),
+        {static_cast<int>(batch_size), RawFeatures::kMaxActiveDimensions},
+        torch::TensorOptions(torch::kI32));
+    torch::Tensor w = torch::from_blob(weights.data(), batch_size,
+                                       torch::TensorOptions(torch::kF32));
+    torch::Tensor s = torch::from_blob(signs.data(), batch_size,
+                                       torch::TensorOptions(torch::kF32));
+    torch::Tensor t = torch::from_blob(target_values.data(), batch_size,
+                                       torch::TensorOptions(torch::kF32));
+    torch::Tensor r = torch::from_blob(game_results.data(), batch_size,
+                                       torch::TensorOptions(torch::kF32));
+
+    net->zero_grad();
+    auto outputs = net(p, q);
+    outputs.squeeze_();
+    auto eval_winrate = torch::sigmoid(s * outputs);
+
+    auto teacher_winrate = torch::sigmoid(t / 600.0);
+    r = (r + 1) * 0.5;
+    const auto lambda = Learner::GetLambda(t);
+
+    auto loss = w * ((1 - lambda) * (eval_winrate - r).square() +
+                     lambda * (eval_winrate - teacher_winrate).square());
+    loss = torch::mean(loss);
+    loss.backward();
+
+    optimizer.step();
+  }
+  SendMessages({ {"quantize_parameters"} });
+}
+} // namespace NNUE
+#endif // defined(USE_LIBTORCH)
 
 }  // namespace Eval
 

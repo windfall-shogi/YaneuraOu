@@ -1160,6 +1160,13 @@ void calc_cross_entropy(Value deep, Value shallow, const PackedSfenValue& psv,
 		(-m * std::log(m + epsilon) - (1.0 - m) * std::log(1.0 - m + epsilon));
 }
 
+#if defined(USE_LIBTORCH)
+torch::Tensor GetLambda(const torch::Tensor& deep) {
+  return torch::where(torch::abs(deep) > Learner::ELMO_LAMBDA_LIMIT,
+                      ELMO_LAMBDA2, ELMO_LAMBDA);
+}
+#endif // defined(USE_LIBTORCH)
+
 #endif
 
 
