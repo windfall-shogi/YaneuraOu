@@ -37,9 +37,12 @@ void AddExampleTorch(Position& pos, Color rootColor,
                      const Learner::PackedSfenValue& psv, double weight);
 #endif // defined(USE_LIBTORCH)
 
-
 // 評価関数パラメータを更新する
 void UpdateParameters(u64 epoch);
+#if defined(USE_LIBTORCH)
+void UpdateParametersTorch(u64 epoch);
+#endif // defined(USE_LIBTORCH)
+
 
 // 学習に問題が生じていないかチェックする
 void CheckHealth();
