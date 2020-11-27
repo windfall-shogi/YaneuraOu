@@ -403,6 +403,7 @@
     <ClInclude Include="eval\nnue\architectures\k-p_256x2-32-32.h" />
     <ClInclude Include="eval\nnue\evaluate_nnue.h" />
     <ClInclude Include="eval\nnue\evaluate_nnue_learner.h" />
+    <ClInclude Include="eval\nnue\evaluate_nnue_torch_model.h" />
     <ClInclude Include="eval\nnue\features\features_common.h" />
     <ClInclude Include="eval\nnue\features\feature_set.h" />
     <ClInclude Include="eval\nnue\features\half_kp.h" />

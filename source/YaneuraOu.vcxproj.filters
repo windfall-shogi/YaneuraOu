@@ -280,6 +280,9 @@
     <ClInclude Include="eval\nnue\trainer\features\factorizer_half_kpe9.h">
       <Filter>リソース ファイル\eval\nnue\trainer\features</Filter>
     </ClInclude>
+    <ClInclude Include="eval\nnue\evaluate_nnue_torch_model.h">
+      <Filter>リソース ファイル\eval\nnue</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="movegen.cpp">
