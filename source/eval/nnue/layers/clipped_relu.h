@@ -20,6 +20,9 @@ namespace Eval::NNUE::Layers {
 #if defined(USE_LIBTORCH)
 class TorchTrainer;
 #endif // defined(USE_LIBTORCH)
+#if defined(USE_LIBTORCH)
+class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
 // Clipped ReLU
 template <typename PreviousLayer>

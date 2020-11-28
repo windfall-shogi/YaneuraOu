@@ -398,6 +398,9 @@ class FeatureTransformer {
 #if defined(USE_LIBTORCH)
   friend class TorchTrainer;
 #endif // defined(USE_LIBTORCH)
+#if defined(USE_LIBTORCH)
+  friend class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
 	// parameter
 	// パラメータ
