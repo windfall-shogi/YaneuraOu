@@ -434,6 +434,7 @@
     <ClInclude Include="eval\nnue\trainer\trainer_feature_transformer.h" />
     <ClInclude Include="eval\nnue\trainer\trainer_input_slice.h" />
     <ClInclude Include="eval\nnue\trainer\trainer_sum.h" />
+    <ClInclude Include="eval\nnue\trainer\trainer_torch.h" />
     <ClInclude Include="extra\all.h" />
     <ClInclude Include="extra\bitop.h" />
     <ClInclude Include="extra\key128.h" />
@@ -486,6 +487,7 @@
     <ClCompile Include="eval\nnue\features\p.cpp" />
     <ClCompile Include="eval\nnue\features\pe9.cpp" />
     <ClCompile Include="eval\nnue\nnue_test_command.cpp" />
+    <ClCompile Include="eval\nnue\trainer\trainer_torch.cpp" />
     <ClCompile Include="extra\bitop.cpp" />
     <ClCompile Include="extra\kif_converter\kif_convert_tools.cpp" />
     <ClCompile Include="extra\long_effect.cpp" />
