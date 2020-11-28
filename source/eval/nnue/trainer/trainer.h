@@ -70,22 +70,6 @@ struct Example {
   double weight;
 };
 
-#if defined(USE_LIBTORCH)
-//! libtorchで扱えるようなバッチ形式でまとめたサンプル
-struct BatchExample {
-  // ネットワークに入力するバッチ
-  // 手番側と非手番側の2個
-  std::vector<int32_t> training_feature_indices[2];
-  // インデックスの登場回数
-  std::vector<int32_t> training_feature_counts[2];
-
-  std::vector<Learner::PackedSfenValue> psvs;
-  std::vector<int> signs;
-  std::vector<double> weights;
-};
-#endif // defined(USE_LIBTORCH)
-
-
 // ハイパーパラメータの設定などに使用するメッセージ
 struct Message {
   Message(const std::string& name, const std::string& value = "") :

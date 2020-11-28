@@ -49,11 +49,6 @@ namespace {
 
 // 学習データ
 std::vector<Example> examples;
-#if defined(USE_LIBTORCH)
-//! libtorchに入力できるようにした学習データ
-BatchExample torch_examples;
-#endif // defined(USE_LIBTORCH)
-
 
 // examplesの排他制御をするMutex
 std::mutex examples_mutex;
