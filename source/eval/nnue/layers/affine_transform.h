@@ -17,6 +17,9 @@ class TorchTrainer;
 }	// namespace Eval::NNUE
 
 namespace Eval::NNUE::Layers {
+#if defined(USE_LIBTORCH)
+class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
 // Affine transformation layer
 // アフィン変換層
@@ -716,6 +719,9 @@ class AffineTransform {
 
 		return output;
 	}
+#if defined(USE_LIBTORCH)
+  friend class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
    private:
 	// パラメータの型
