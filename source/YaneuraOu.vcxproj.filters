@@ -280,6 +280,9 @@
     <ClInclude Include="eval\nnue\evaluate_nnue_torch_model.h">
       <Filter>リソース ファイル\eval\nnue</Filter>
     </ClInclude>
+    <ClInclude Include="eval\nnue\trainer\trainer_torch.h">
+      <Filter>リソース ファイル\eval\nnue\trainer</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="movegen.cpp">
@@ -422,6 +425,9 @@
     </ClCompile>
     <ClCompile Include="eval\nnue\features\pe9.cpp">
       <Filter>リソース ファイル\eval\nnue\features</Filter>
+    </ClCompile>
+    <ClCompile Include="eval\nnue\trainer\trainer_torch.cpp">
+      <Filter>リソース ファイル\eval\nnue\trainer</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

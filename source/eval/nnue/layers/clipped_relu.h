@@ -12,6 +12,9 @@
 namespace Eval {
 
 namespace NNUE {
+#if defined(USE_LIBTORCH)
+class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
 namespace Layers {
 
@@ -140,6 +143,9 @@ class ClippedReLU {
  private:
   // 学習用クラスをfriendにする
   friend class Trainer<ClippedReLU>;
+#if defined(USE_LIBTORCH)
+  friend class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
   // この層の直前の層
   PreviousLayer previous_layer_;
