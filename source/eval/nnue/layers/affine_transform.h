@@ -586,6 +586,9 @@ class AffineTransform {
 #if defined(USE_LIBTORCH)
   friend class TorchTrainer;
 #endif // defined(USE_LIBTORCH)
+#if defined(USE_LIBTORCH)
+  friend class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
 				__m128i sum0 = m128_dpbusd_epi32(input_vector[0], row0[0]);
 				__m128i sum1 = m128_dpbusd_epi32(input_vector[0], row1[0]);
