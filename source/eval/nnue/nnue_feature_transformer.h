@@ -322,6 +322,10 @@ class FeatureTransformer {
 
   // 学習用クラスをfriendにする
   friend class Trainer<FeatureTransformer>;
+#if defined(USE_LIBTORCH)
+  friend class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
+
 
   // パラメータ
   alignas(kCacheLineSize) BiasType biases_[kHalfDimensions];

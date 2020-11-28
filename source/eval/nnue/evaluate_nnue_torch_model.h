@@ -5,7 +5,12 @@
 #include "../../config.h"
 
 #if defined(EVAL_LEARN) && defined(EVAL_NNUE) && defined(USE_LIBTORCH)
+#pragma warning(push)
+#pragma warning(disable : 4101 4244 4251 4267 4275 4819 4996 26110 26812 26819 26439 26444 26451 26478 26495 26817)
+#define _SILENCE_CXX17_ADAPTOR_TYPEDEFS_DEPRECATION_WARNING
+#define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
 #include <torch/torch.h>
+#pragma warning(pop)
 
 #include "nnue_common.h"
 #include "nnue_architecture.h"

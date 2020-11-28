@@ -10,6 +10,12 @@
 
 #include "../nnue_common.h"
 
+namespace Eval::NNUE {
+#if defined(USE_LIBTORCH)
+class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
+}	// namespace Eval::NNUE
+
 namespace Eval::NNUE::Layers {
 
   // Affine transformation layer
@@ -271,6 +277,9 @@ namespace Eval::NNUE::Layers {
 
   // 学習用クラスをfriendにする
   friend class Trainer<AffineTransform>;
+#if defined(USE_LIBTORCH)
+  friend class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
   // この層の直前の層
   PreviousLayer previous_layer_;
