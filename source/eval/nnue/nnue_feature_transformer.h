@@ -389,6 +389,9 @@ class FeatureTransformer {
 	// Make the learning class a friend
 	// 学習用クラスをfriendにする
 	friend class Trainer<FeatureTransformer>;
+#if defined(USE_LIBTORCH)
+  friend class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
 	// parameter
 	// パラメータ

@@ -10,6 +10,12 @@
 
 #include "../nnue_common.h"
 
+namespace Eval::NNUE {
+#if defined(USE_LIBTORCH)
+class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
+}	// namespace Eval::NNUE
+
 namespace Eval::NNUE::Layers {
 
 // Affine transformation layer
@@ -574,6 +580,9 @@ class AffineTransform {
 				const auto row1 = reinterpret_cast<const __m128i*>(&weights_[offset1]);
 				const auto row2 = reinterpret_cast<const __m128i*>(&weights_[offset2]);
 				const auto row3 = reinterpret_cast<const __m128i*>(&weights_[offset3]);
+#if defined(USE_LIBTORCH)
+  friend class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
 				__m128i sum0 = m128_dpbusd_epi32(input_vector[0], row0[0]);
 				__m128i sum1 = m128_dpbusd_epi32(input_vector[0], row1[0]);

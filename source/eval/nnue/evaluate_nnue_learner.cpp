@@ -30,6 +30,7 @@
 
 #if defined(USE_LIBTORCH)
 #include "evaluate_nnue_torch_model.h"
+#include "trainer/trainer_torch.h"
 #endif // defined(USE_LIBTORCH)
 
 #if defined(USE_LIBTORCH)
@@ -61,6 +62,7 @@ std::mt19937 rng;
 // 学習器
 std::shared_ptr<Trainer<Network>> trainer;
 #if defined(USE_LIBTORCH)
+std::shared_ptr<TorchTrainer> torch_trainer;
 // libtorchで作った学習用のモデル
 Net net;
 torch::optim::SGD optimizer(net->parameters(), 0.01);
@@ -324,7 +326,7 @@ void UpdateParametersTorch(u64 epoch) {
                                        torch::TensorOptions(torch::kF32));
 
     net->zero_grad();
-    auto outputs = net(p, q);
+    auto outputs = net->forward(p, q);
     outputs.squeeze_();
     auto eval_winrate = torch::sigmoid(s * outputs);
 

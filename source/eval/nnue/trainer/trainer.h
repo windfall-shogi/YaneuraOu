@@ -81,7 +81,7 @@ struct Message {
 };
 
 // メッセージを受理するかどうかを判定する
-bool ReceiveMessage(const std::string& name, Message* message) {
+inline bool ReceiveMessage(const std::string& name, Message* message) {
   const auto subscript = "[" + std::to_string(message->num_peekers) + "]";
   if (message->name.substr(0, name.size() + 1) == name + "[") {
     ++message->num_peekers;
@@ -94,7 +94,7 @@ bool ReceiveMessage(const std::string& name, Message* message) {
 }
 
 // 文字列を分割する
-std::vector<std::string> Split(const std::string& input, char delimiter) {
+inline std::vector<std::string> Split(const std::string& input, char delimiter) {
   std::istringstream stream(input);
   std::string field;
   std::vector<std::string> fields;
