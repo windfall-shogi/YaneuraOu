@@ -101,6 +101,7 @@ void TorchTrainer::DequantizeAffine1() {
   std::copy_n(biases.data_ptr<float>(), fc1.kOutputDimensions,
               b.data_ptr<float>());
 }
+}
 
 void TorchTrainer::QuantizeAffine2() {
   // “ñ‚Â–Ú‚Ì‘SŒ‹‡‘w
