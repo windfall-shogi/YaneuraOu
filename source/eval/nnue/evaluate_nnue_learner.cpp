@@ -62,10 +62,9 @@ std::mt19937 rng;
 // 学習器
 std::shared_ptr<Trainer<Network>> trainer;
 #if defined(USE_LIBTORCH)
-std::shared_ptr<TorchTrainer> torch_trainer;
 // libtorchで作った学習用のモデル
-Net net;
-torch::optim::SGD optimizer(net->parameters(), 0.01);
+// optimizerもこの中に入っている
+std::shared_ptr<TorchTrainer> torch_trainer;
 #endif // defined(USE_LIBTORCH)
 
 
@@ -95,11 +94,29 @@ void InitializeTraining(double eta1, u64 eta1_epoch,
 
   ASSERT(feature_transformer);
   ASSERT(network);
+#if defined(USE_LIBTORCH)
+  torch_trainer = std::make_shared<TorchTrainer>();
+#else
   trainer = Trainer<Network>::Create(network.get(), feature_transformer.get());
+#endif // defined(USE_LIBTORCH)
 
+#if defined(USE_LIBTORCH)
+  if (Options["SkipLoadingEval"]) {
+    // torchのモデルから探索用のモデルへパラメータを変換
+    torch_trainer->Quantize();
+  } else {
+    // 探索用のモデルからtorchのモデルへパラメータを変換
+
+    // 既に保存しているtorchのモデルがあればそれを読み込んでもいいが、
+    // 値が飽和しているときのことを考えると探索用のモデルから変換した方が良いと思われる
+    // optimizerは保存したものを読み込んだ方が良いかもしれない
+    torch_trainer->Dequantize();
+  }
+#else
   if (Options["SkipLoadingEval"]) {
     trainer->Initialize(rng);
   }
+#endif // defined(USE_LIBTORCH)
 
   global_learning_rate_scale = 1.0;
   EvalLearningTools::Weight::init_eta(eta1, eta2, eta3, eta1_epoch, eta2_epoch);
@@ -239,6 +256,9 @@ void save_eval(std::string dir_name) {
   const std::string file_name = Path::Combine(eval_dir, NNUE::kFileName);
   std::ofstream stream(file_name, std::ios::binary);
   const bool result = NNUE::WriteParameters(stream);
+#if defined(USE_LIBTORCH)
+  NNUE::torch_trainer->Save(eval_dir);
+#endif // defined(USE_LIBTORCH)
 
   if (!result)
   {
@@ -261,13 +281,7 @@ void UpdateParametersTorch(u64 epoch) {
 
   EvalLearningTools::Weight::calc_eta(epoch);
   const auto new_lr = static_cast<LearnFloatType>(get_eta() / batch_size);
-
-  // 学習係数の変更方法
-  // https://stackoverflow.com/questions/62415285/updating-learning-rate-with-libtorch-1-5-and-optimiser-options-in-c
-  for (auto param_group : optimizer.param_groups()) {
-    // Static cast needed as options() returns OptimizerOptions(base class)
-    static_cast<torch::optim::SGDOptions&>(param_group.options()).lr(new_lr);
-  }
+  torch_trainer->SetLearningRate(new_lr);
 
   std::lock_guard<std::mutex> lock(examples_mutex);
   std::shuffle(examples.begin(), examples.end(), rng);
@@ -325,8 +339,8 @@ void UpdateParametersTorch(u64 epoch) {
     torch::Tensor r = torch::from_blob(game_results.data(), batch_size,
                                        torch::TensorOptions(torch::kF32));
 
-    net->zero_grad();
-    auto outputs = net->forward(p, q);
+    torch_trainer->net->zero_grad();
+    auto outputs = torch_trainer->net->forward(p, q);
     outputs.squeeze_();
     auto eval_winrate = torch::sigmoid(s * outputs);
 
@@ -339,9 +353,11 @@ void UpdateParametersTorch(u64 epoch) {
     loss = torch::mean(loss);
     loss.backward();
 
-    optimizer.step();
+    torch_trainer->optimizer.step();
   }
-  SendMessages({ {"quantize_parameters"} });
+  // パラメータを量子化
+  // 探索用の評価関数を更新する
+  torch_trainer->Quantize();
 }
 } // namespace NNUE
 #endif // defined(USE_LIBTORCH)
