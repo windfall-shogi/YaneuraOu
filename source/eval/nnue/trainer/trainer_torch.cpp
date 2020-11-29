@@ -127,6 +127,10 @@ void TorchTrainer::DequantizeAffine2() {
                                   torch::TensorOptions(torch::kInt32));
   b = biasses.to(torch::kFloat32) / (scale * 127);
 }
+void TorchTrainer::DequantizeAffine2() {
+  // “ñ‚Â–Ú‚Ì‘SŒ‹‡‘w
+  auto& fc2 = network->previous_layer_.previous_layer_;
+  static constexpr auto scale = 64.0;
 
 void TorchTrainer::QuantizeAffine3() {
   // O‚Â–Ú‚Ì‘SŒ‹‡‘w
