@@ -61,7 +61,10 @@ struct NetImpl : torch::nn::Module {
             register_module("feature_transformer", Embedding())),
         affine1(register_module("affine1", torch::nn::Linear(512, 32))),
         affine2(register_module("affine2", torch::nn::Linear(32, 32))),
-        affine3(register_module("affine3", torch::nn::Linear(32, 1))) {}
+        affine3(register_module("affine3", torch::nn::Linear(32, 1))) {
+    affine1->bias = torch::ones_like(affine1->bias) * 0.5;
+    affine2->bias = torch::ones_like(affine2->bias) * 0.5;
+  }
 
   torch::Tensor forward(torch::Tensor input_p, torch::Tensor input_q) {
     const auto p = feature_transformer(input_p);
