@@ -102,6 +102,7 @@ void TorchTrainer::DequantizeAffine1() {
               b.data_ptr<float>());
 }
 }
+}
 
 void TorchTrainer::QuantizeAffine2() {
   // “ñ‚Â–Ú‚Ì‘SŒ‹‡‘w
