@@ -1,4 +1,4 @@
-#include "trainer_torch.h"
+ï»¿#include "trainer_torch.h"
 
 #if defined(EVAL_LEARN) && defined(EVAL_NNUE) && defined(USE_LIBTORCH)
 #include <climits>
@@ -47,7 +47,7 @@ void TorchTrainer::DequantizeFeatureTransformer() {
 }
 
 void TorchTrainer::QuantizeAffine1() {
-  // ˆê‚Â–Ú‚Ì‘SŒ‹‡‘w
+  // ä¸€ã¤ç›®ã®å…¨çµåˆå±¤
   auto& fc1 =
       network->previous_layer_.previous_layer_.previous_layer_.previous_layer_;
   static constexpr auto scale = 64.0;
@@ -71,9 +71,9 @@ void TorchTrainer::QuantizeAffine1() {
   }
 }
 void TorchTrainer::DequantizeAffine1() {
-  // ˆê‚Â–Ú‚Ì‘SŒ‹‡‘w
+  // ä¸€ã¤ç›®ã®å…¨çµåˆå±¤
   auto& fc1 =
-      network->previous_layer_.previous_layer_.previous_layer_.previous_layer_;
+    network->previous_layer_.previous_layer_.previous_layer_.previous_layer_;
   static constexpr auto scale = 64.0;
 
   auto& w = net->affine1->weight;
@@ -82,6 +82,7 @@ void TorchTrainer::DequantizeAffine1() {
                                   torch::TensorOptions(torch::kInt8));
   w = weights.transpose(1, 0).to(torch::kFloat32) / scale;
 
+  const auto& biases = fc1.biases_;
   auto& b = net->affine1->bias;
   auto biasses = torch::from_blob(fc1.biases_, fc1.kOutputDimensions,
                                   torch::TensorOptions(torch::kInt32));
@@ -89,7 +90,7 @@ void TorchTrainer::DequantizeAffine1() {
 }
 
 void TorchTrainer::QuantizeAffine2() {
-  // “ñ‚Â–Ú‚Ì‘SŒ‹‡‘w
+  // äºŒã¤ç›®ã®å…¨çµåˆå±¤
   auto& fc2 = network->previous_layer_.previous_layer_;
   static constexpr auto scale = 64.0;
 
@@ -98,7 +99,7 @@ void TorchTrainer::QuantizeAffine2() {
   for (int i = 0; i < fc2.kInputDimensions; ++i) {
     for (int j = 0; j < fc2.kOutputDimensions; ++j) {
       weights[j * fc2.kInputDimensions + i] = Round<int8_t>(
-          std::clamp(w[i][j].item<float>() * scale, -128.0, 127.0));
+        std::clamp(w[i][j].item<float>() * scale, -128.0, 127.0));
     }
   }
 
@@ -106,13 +107,13 @@ void TorchTrainer::QuantizeAffine2() {
   const auto& b = net->affine2->bias;
   for (int i = 0; i < fc2.kOutputDimensions; ++i) {
     biases[i] = Round<int32_t>(
-        std::clamp(b[i].item<float>() * scale * 127.0,
-                   static_cast<double>(std::numeric_limits<int32_t>::min()),
-                   static_cast<double>(std::numeric_limits<int32_t>::max())));
+      std::clamp(b[i].item<float>() * scale * 127.0,
+        static_cast<double>(std::numeric_limits<int32_t>::min()),
+        static_cast<double>(std::numeric_limits<int32_t>::max())));
   }
 }
 void TorchTrainer::DequantizeAffine2() {
-  // “ñ‚Â–Ú‚Ì‘SŒ‹‡‘w
+  // äºŒã¤ç›®ã®å…¨çµåˆå±¤
   auto& fc2 = network->previous_layer_.previous_layer_;
   static constexpr auto scale = 64.0;
 
@@ -129,7 +130,7 @@ void TorchTrainer::DequantizeAffine2() {
 }
 
 void TorchTrainer::QuantizeAffine3() {
-  // O‚Â–Ú‚Ì‘SŒ‹‡‘w
+  // ä¸‰ã¤ç›®ã®å…¨çµåˆå±¤
   auto& fc3 = *network;
   static constexpr auto scale = 600.0 * 16.0 / 127.0;
 
@@ -138,7 +139,7 @@ void TorchTrainer::QuantizeAffine3() {
   for (int i = 0; i < fc3.kInputDimensions; ++i) {
     for (int j = 0; j < fc3.kOutputDimensions; ++j) {
       weights[j * fc3.kInputDimensions + i] = Round<int8_t>(
-          std::clamp(w[i][j].item<float>() * scale, -128.0, 127.0));
+        std::clamp(w[i][j].item<float>() * scale, -128.0, 127.0));
     }
   }
 
@@ -146,13 +147,13 @@ void TorchTrainer::QuantizeAffine3() {
   const auto& b = net->affine3->bias;
   for (int i = 0; i < fc3.kOutputDimensions; ++i) {
     biases[i] = Round<int32_t>(
-        std::clamp(b[i].item<float>() * scale * 127.0,
-                   static_cast<double>(std::numeric_limits<int32_t>::min()),
-                   static_cast<double>(std::numeric_limits<int32_t>::max())));
+      std::clamp(b[i].item<float>() * scale * 127.0,
+        static_cast<double>(std::numeric_limits<int32_t>::min()),
+        static_cast<double>(std::numeric_limits<int32_t>::max())));
   }
 }
 void TorchTrainer::DequantizeAffine3() {
-  // O‚Â–Ú‚Ì‘SŒ‹‡‘w
+  // ä¸‰ã¤ç›®ã®å…¨çµåˆå±¤
   auto& fc3 = *network;
   static constexpr auto scale = 600.0 * 16.0 / 127.0;
 
