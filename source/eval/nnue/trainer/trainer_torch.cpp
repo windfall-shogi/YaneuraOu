@@ -32,20 +32,18 @@ void TorchTrainer::QuantizeFeatureTransformer() {
 void TorchTrainer::DequantizeFeatureTransformer() {
   static constexpr auto scale = 127.0f;
 
-  const auto& weights = feature_transformer->weights_;
   auto& w = net->feature_transformer->embedding->weight;
-  for (int i = 0; i < FeatureTransformer::kInputDimensions; ++i) {
-    const auto offset = i * FeatureTransformer::kHalfDimensions;
-    for (int j = 0; j < FeatureTransformer::kHalfDimensions; ++j) {
-      w[i][j] = weights[offset + j] / scale;
-    }
-  }
+  auto weights = torch::from_blob(feature_transformer->weights_,
+                                  {FeatureTransformer::kInputDimensions,
+                                   FeatureTransformer::kHalfDimensions},
+                                  torch::TensorOptions(torch::kInt16));
+  w = weights.to(torch::kFloat32) / scale;
 
-  const auto& biases = feature_transformer->biases_;
   auto& b = net->feature_transformer->bias;
-  for (int i = 0; i < FeatureTransformer::kHalfDimensions; ++i) {
-    b[i] = biases[i] / scale;
-  }
+  auto biases = torch::from_blob(feature_transformer->biases_,
+                                 FeatureTransformer::kHalfDimensions,
+                                 torch::TensorOptions(torch::kInt16));
+  b = biases.to(torch::kFloat32) / scale;
 }
 
 void TorchTrainer::QuantizeAffine1() {
@@ -74,23 +72,20 @@ void TorchTrainer::QuantizeAffine1() {
 }
 void TorchTrainer::DequantizeAffine1() {
   // ˆê‚Â–Ú‚Ì‘SŒ‹‡‘w
-  const auto& fc1 =
-    network->previous_layer_.previous_layer_.previous_layer_.previous_layer_;
+  auto& fc1 =
+      network->previous_layer_.previous_layer_.previous_layer_.previous_layer_;
   static constexpr auto scale = 64.0;
 
-  const auto& weights = fc1.weights_;
   auto& w = net->affine1->weight;
-  for (int i = 0; i < fc1.kInputDimensions; ++i) {
-    for (int j = 0; j < fc1.kOutputDimensions; ++j) {
-      w[i][j] = weights[j * fc1.kInputDimensions + i] / scale;
-    }
-  }
+  auto weights = torch::from_blob(fc1.weights_,
+                                  {fc1.kInputDimensions, fc1.kOutputDimensions},
+                                  torch::TensorOptions(torch::kInt8));
+  w = weights.transpose(1, 0).to(torch::kFloat32) / scale;
 
-  const auto& biases = fc1.biases_;
   auto& b = net->affine1->bias;
-  for (int i = 0; i < fc1.kOutputDimensions; ++i) {
-    b[i] = biases[i] / (scale * 127.0);
-  }
+  auto biasses = torch::from_blob(fc1.biases_, fc1.kOutputDimensions,
+                                  torch::TensorOptions(torch::kInt32));
+  b = biasses.to(torch::kFloat32) / (scale * 127);
 }
 
 void TorchTrainer::QuantizeAffine2() {
@@ -103,7 +98,7 @@ void TorchTrainer::QuantizeAffine2() {
   for (int i = 0; i < fc2.kInputDimensions; ++i) {
     for (int j = 0; j < fc2.kOutputDimensions; ++j) {
       weights[j * fc2.kInputDimensions + i] = Round<int8_t>(
-        std::clamp(w[i][j].item<float>() * scale, -128.0, 127.0));
+          std::clamp(w[i][j].item<float>() * scale, -128.0, 127.0));
     }
   }
 
@@ -111,9 +106,9 @@ void TorchTrainer::QuantizeAffine2() {
   const auto& b = net->affine2->bias;
   for (int i = 0; i < fc2.kOutputDimensions; ++i) {
     biases[i] = Round<int32_t>(
-      std::clamp(b[i].item<float>() * scale * 127.0,
-        static_cast<double>(std::numeric_limits<int32_t>::min()),
-        static_cast<double>(std::numeric_limits<int32_t>::max())));
+        std::clamp(b[i].item<float>() * scale * 127.0,
+                   static_cast<double>(std::numeric_limits<int32_t>::min()),
+                   static_cast<double>(std::numeric_limits<int32_t>::max())));
   }
 }
 void TorchTrainer::DequantizeAffine2() {
@@ -121,19 +116,16 @@ void TorchTrainer::DequantizeAffine2() {
   auto& fc2 = network->previous_layer_.previous_layer_;
   static constexpr auto scale = 64.0;
 
-  const auto& weights = fc2.weights_;
   auto& w = net->affine2->weight;
-  for (int i = 0; i < fc2.kInputDimensions; ++i) {
-    for (int j = 0; j < fc2.kOutputDimensions; ++j) {
-      w[i][j] = weights[j * fc2.kInputDimensions + i] / scale;
-    }
-  }
+  auto weights = torch::from_blob(fc2.weights_,
+                                  {fc2.kInputDimensions, fc2.kOutputDimensions},
+                                  torch::TensorOptions(torch::kInt8));
+  w = weights.transpose(1, 0).to(torch::kFloat32) / scale;
 
-  const auto& biases = fc2.biases_;
   auto& b = net->affine2->bias;
-  for (int i = 0; i < fc2.kOutputDimensions; ++i) {
-    b[i] = biases[i] / (scale * 127.0);
-  }
+  auto biasses = torch::from_blob(fc2.biases_, fc2.kOutputDimensions,
+                                  torch::TensorOptions(torch::kInt32));
+  b = biasses.to(torch::kFloat32) / (scale * 127);
 }
 
 void TorchTrainer::QuantizeAffine3() {
@@ -146,7 +138,7 @@ void TorchTrainer::QuantizeAffine3() {
   for (int i = 0; i < fc3.kInputDimensions; ++i) {
     for (int j = 0; j < fc3.kOutputDimensions; ++j) {
       weights[j * fc3.kInputDimensions + i] = Round<int8_t>(
-        std::clamp(w[i][j].item<float>() * scale, -128.0, 127.0));
+          std::clamp(w[i][j].item<float>() * scale, -128.0, 127.0));
     }
   }
 
@@ -154,9 +146,9 @@ void TorchTrainer::QuantizeAffine3() {
   const auto& b = net->affine3->bias;
   for (int i = 0; i < fc3.kOutputDimensions; ++i) {
     biases[i] = Round<int32_t>(
-      std::clamp(b[i].item<float>() * scale * 127.0,
-        static_cast<double>(std::numeric_limits<int32_t>::min()),
-        static_cast<double>(std::numeric_limits<int32_t>::max())));
+        std::clamp(b[i].item<float>() * scale * 127.0,
+                   static_cast<double>(std::numeric_limits<int32_t>::min()),
+                   static_cast<double>(std::numeric_limits<int32_t>::max())));
   }
 }
 void TorchTrainer::DequantizeAffine3() {
@@ -164,19 +156,16 @@ void TorchTrainer::DequantizeAffine3() {
   auto& fc3 = *network;
   static constexpr auto scale = 600.0 * 16.0 / 127.0;
 
-  const auto& weights = fc3.weights_;
   auto& w = net->affine3->weight;
-  for (int i = 0; i < fc3.kInputDimensions; ++i) {
-    for (int j = 0; j < fc3.kOutputDimensions; ++j) {
-      w[i][j] = weights[j * fc3.kInputDimensions + i] / scale;
-    }
-  }
+  auto weights = torch::from_blob(fc3.weights_,
+                                  {fc3.kInputDimensions, fc3.kOutputDimensions},
+                                  torch::TensorOptions(torch::kInt8));
+  w = weights.transpose(1, 0).to(torch::kFloat32) / scale;
 
-  const auto& biases = fc3.biases_;
   auto& b = net->affine3->bias;
-  for (int i = 0; i < fc3.kOutputDimensions; ++i) {
-    b[i] = biases[i] / (scale * 127.0);
-  }
+  auto biasses = torch::from_blob(fc3.biases_, fc3.kOutputDimensions,
+                                  torch::TensorOptions(torch::kInt32));
+  b = biasses.to(torch::kFloat32) / (scale * 127);
 }
 
 }  // namespace NNUE
