@@ -31,7 +31,8 @@ struct EmbeddingImpl : torch::nn::Module {
             "bias", torch::ones(kTransformedFeatureDimensions) * 0.5)) {}
 
   torch::Tensor forward(torch::Tensor input) {
-    const auto h = embedding(input).sum(1);
+    auto h = embedding(input);
+    h = torch::sum(h, 1);
     return h + bias;
   }
 
@@ -62,8 +63,8 @@ struct NetImpl : torch::nn::Module {
         affine1(register_module("affine1", torch::nn::Linear(512, 32))),
         affine2(register_module("affine2", torch::nn::Linear(32, 32))),
         affine3(register_module("affine3", torch::nn::Linear(32, 1))) {
-    affine1->bias = torch::ones_like(affine1->bias) * 0.5;
-    affine2->bias = torch::ones_like(affine2->bias) * 0.5;
+    std::fill_n(affine1->bias.data_ptr<float>(), 32, 0.5f);
+    std::fill_n(affine2->bias.data_ptr<float>(), 32, 0.5f);
   }
 
   torch::Tensor forward(torch::Tensor input_p, torch::Tensor input_q) {
