@@ -287,7 +287,7 @@ void UpdateParametersTorch(u64 epoch) {
   std::shuffle(examples.begin(), examples.end(), rng);
 
   const auto data_size = batch_size * RawFeatures::kMaxActiveDimensions;
-  std::vector<int32_t> indices[2];
+  std::vector<int64_t> indices[2];
   for (int i = 0; i < 2; ++i) {
     indices[i].reserve(data_size);
   }
@@ -325,11 +325,11 @@ void UpdateParametersTorch(u64 epoch) {
     torch::Tensor p = torch::from_blob(
         indices[0].data(),
         {static_cast<int>(batch_size), RawFeatures::kMaxActiveDimensions},
-        torch::TensorOptions(torch::kI32));
+        torch::TensorOptions(torch::kI64));
     torch::Tensor q = torch::from_blob(
         indices[1].data(),
         {static_cast<int>(batch_size), RawFeatures::kMaxActiveDimensions},
-        torch::TensorOptions(torch::kI32));
+        torch::TensorOptions(torch::kI64));
     torch::Tensor w = torch::from_blob(weights.data(), batch_size,
                                        torch::TensorOptions(torch::kF32));
     torch::Tensor s = torch::from_blob(signs.data(), batch_size,
