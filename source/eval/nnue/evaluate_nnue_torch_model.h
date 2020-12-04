@@ -26,7 +26,7 @@ struct EmbeddingImpl : torch::nn::Module {
             "embedding", torch::nn::Embedding(torch::nn::EmbeddingOptions(
                                                   RawFeatures::kDimensions,
                                                   kTransformedFeatureDimensions)
-                                                  .sparse(true)))),
+                                                  .sparse(false)))),
         bias(register_parameter(
             "bias", torch::ones(kTransformedFeatureDimensions) * 0.5)) {}
 
