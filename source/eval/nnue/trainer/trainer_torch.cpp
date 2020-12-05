@@ -146,13 +146,9 @@ void TorchTrainer::DequantizeAffine2() {
   std::copy_n(biases.data_ptr<float>(), fc2.kOutputDimensions,
               b.data_ptr<float>());
 }
-void TorchTrainer::DequantizeAffine2() {
-  // 二つ目の全結合層
-  auto& fc2 = network->previous_layer_.previous_layer_;
-  static constexpr auto scale = 64.0;
 
 void TorchTrainer::QuantizeAffine3() {
-  // 三つ目の全結合層
+  //  三つ目の全結合層
   auto& fc3 = *network;
   static constexpr float scale = 600.0f * 16.0f / 127.0f;
 

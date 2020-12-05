@@ -419,7 +419,8 @@
     </ClCompile>
     <ClCompile Include="eval\nnue\trainer\trainer_torch.cpp">
       <Filter>リソース ファイル\eval\nnue\trainer</Filter>
-    </ClCompile>    <ClCompile Include="eval\material\evaluate_material.cpp">
+    </ClCompile>
+    <ClCompile Include="eval\material\evaluate_material.cpp">
       <Filter>リソース ファイル\eval\material</Filter>
     </ClCompile>
     <ClCompile Include="book\apery_book.cpp">

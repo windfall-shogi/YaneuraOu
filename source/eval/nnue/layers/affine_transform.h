@@ -17,10 +17,6 @@ class TorchTrainer;
 }	// namespace Eval::NNUE
 
 namespace Eval::NNUE::Layers {
-#if defined(USE_LIBTORCH)
-class TorchTrainer;
-#endif // defined(USE_LIBTORCH)
-
 // Affine transformation layer
 // アフィン変換層
 template <typename PreviousLayer, IndexType OutputDimensions>
@@ -728,8 +724,11 @@ class AffineTransform {
 	using BiasType   = OutputType;
 	using WeightType = std::int8_t;
 
-	// 学習用クラスをfriendにする
-	friend class Trainer<AffineTransform>;
+  // 学習用クラスをfriendにする
+  friend class Trainer<AffineTransform>;
+#if defined(USE_LIBTORCH)
+  friend class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
 	// この層の直前の層
 	PreviousLayer previous_layer_;

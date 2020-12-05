@@ -65,9 +65,6 @@ std::shared_ptr<Trainer<Network>> trainer;
 // libtorchで作った学習用のモデル
 // optimizerもこの中に入っている
 std::shared_ptr<TorchTrainer> torch_trainer;
-// libtorchで作った学習用のモデル
-// optimizerもこの中に入っている
-std::shared_ptr<TorchTrainer> torch_trainer;
 #endif // defined(USE_LIBTORCH)
 
 
