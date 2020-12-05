@@ -60,9 +60,18 @@ struct NetImpl : torch::nn::Module {
   NetImpl()
       : feature_transformer(
             register_module("feature_transformer", Embedding())),
-        affine1(register_module("affine1", torch::nn::Linear(512, 32))),
-        affine2(register_module("affine2", torch::nn::Linear(32, 32))),
-        affine3(register_module("affine3", torch::nn::Linear(32, 1))) {
+        affine1(register_module(
+            "affine1",
+            torch::nn::Linear(Layers::InputLayer::kOutputDimensions,
+                              Layers::HiddenLayer1::kOutputDimensions))),
+        affine2(register_module(
+            "affine2",
+            torch::nn::Linear(Layers::HiddenLayer1::kOutputDimensions,
+                              Layers::HiddenLayer2::kOutputDimensions))),
+        affine3(register_module(
+            "affine3",
+            torch::nn::Linear(Layers::HiddenLayer2::kOutputDimensions,
+                              Layers::OutputLayer::kOutputDimensions))) {
     std::fill_n(affine1->bias.data_ptr<float>(), 32, 0.5f);
     std::fill_n(affine2->bias.data_ptr<float>(), 32, 0.5f);
   }
