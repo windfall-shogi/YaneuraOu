@@ -74,7 +74,8 @@ void TorchTrainer::QuantizeAffine1() {
   auto tmp_b = b * scale * 127.0f;
   tmp_b.clamp_(std::numeric_limits<int32_t>::min(),
                std::numeric_limits<int32_t>::max());
-  tmp_b.to(torch::kInt32);
+  tmp_b.round_();
+  tmp_b = tmp_b.to(torch::kInt32);
   auto& biases = fc1.biases_;
   std::copy_n(tmp_b.data_ptr<int32_t>(), fc1.kOutputDimensions, biases);
 }
@@ -119,7 +120,8 @@ void TorchTrainer::QuantizeAffine2() {
   auto tmp_b = b * scale * 127.0f;
   tmp_b.clamp_(std::numeric_limits<int32_t>::min(),
                std::numeric_limits<int32_t>::max());
-  tmp_b.to(torch::kInt32);
+  tmp_b.round_();
+  tmp_b = tmp_b.to(torch::kInt32);
   auto& biases = fc2.biases_;
   std::copy_n(tmp_b.data_ptr<int32_t>(), fc2.kOutputDimensions, biases);
 }
@@ -163,7 +165,8 @@ void TorchTrainer::QuantizeAffine3() {
   auto tmp_b = b * scale * 127.0f;
   tmp_b.clamp_(std::numeric_limits<int32_t>::min(),
                std::numeric_limits<int32_t>::max());
-  tmp_b.to(torch::kInt32);
+  tmp_b.round_();
+  tmp_b = tmp_b.to(torch::kInt32);
   auto& biases = fc3.biases_;
   std::copy_n(tmp_b.data_ptr<int32_t>(), fc3.kOutputDimensions, biases);
 }
