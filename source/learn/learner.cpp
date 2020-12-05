@@ -1906,7 +1906,7 @@ void LearnerThink::thread_worker(size_t thread_id)
 					// lossの計算
 					calc_loss(thread_id , done);
 
-#if defined(EVAL_NNUE)
+#if defined(EVAL_NNUE) && !defined(USE_LIBTORCH)
 					Eval::NNUE::CheckHealth();
 #endif
 
