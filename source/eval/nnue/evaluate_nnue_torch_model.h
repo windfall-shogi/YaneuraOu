@@ -81,7 +81,8 @@ struct NetImpl : torch::nn::Module {
     const auto q = feature_transformer(input_q);
     auto h = torch::cat({ p, q }, 1);
 
-    h = relu(h);
+    //h = relu(h);
+    h = sigmoid(h);
     h = affine1(h);
 
     h = relu(h);
@@ -96,7 +97,7 @@ struct NetImpl : torch::nn::Module {
   Embedding feature_transformer;
   torch::nn::Linear affine1, affine2, affine3;
   ClippedReLU relu;
-
+  torch::nn::Sigmoid sigmoid;
 };
 // shared_ptr‚Ý‚½‚¢‚É—Ç‚¢Š´‚¶‚É‚µ‚Ä‚­‚ê‚é
 TORCH_MODULE(Net);
