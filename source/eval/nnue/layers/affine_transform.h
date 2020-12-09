@@ -17,13 +17,6 @@ class TorchTrainer;
 }	// namespace Eval::NNUE
 
 namespace Eval::NNUE::Layers {
-#if defined(USE_LIBTORCH)
-class TorchTrainer;
-#endif // defined(USE_LIBTORCH)
-#if defined(USE_LIBTORCH)
-class TorchTrainer;
-#endif // defined(USE_LIBTORCH)
-
 // Affine transformation layer
 // アフィン変換層
 template <typename PreviousLayer, IndexType OutputDimensions>
@@ -589,9 +582,6 @@ class AffineTransform {
 #if defined(USE_LIBTORCH)
   friend class TorchTrainer;
 #endif // defined(USE_LIBTORCH)
-#if defined(USE_LIBTORCH)
-  friend class TorchTrainer;
-#endif // defined(USE_LIBTORCH)
 
 				__m128i sum0 = m128_dpbusd_epi32(input_vector[0], row0[0]);
 				__m128i sum1 = m128_dpbusd_epi32(input_vector[0], row1[0]);
@@ -728,17 +718,17 @@ class AffineTransform {
 #if defined(USE_LIBTORCH)
   friend class TorchTrainer;
 #endif // defined(USE_LIBTORCH)
-#if defined(USE_LIBTORCH)
-  friend class TorchTrainer;
-#endif // defined(USE_LIBTORCH)
 
    private:
 	// パラメータの型
 	using BiasType   = OutputType;
 	using WeightType = std::int8_t;
 
-	// 学習用クラスをfriendにする
-	friend class Trainer<AffineTransform>;
+  // 学習用クラスをfriendにする
+  friend class Trainer<AffineTransform>;
+#if defined(USE_LIBTORCH)
+  friend class TorchTrainer;
+#endif // defined(USE_LIBTORCH)
 
 	// この層の直前の層
 	PreviousLayer previous_layer_;

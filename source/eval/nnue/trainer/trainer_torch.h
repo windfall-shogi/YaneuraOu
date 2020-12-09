@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #ifndef _NNUE_TRAINER_TORCH_H_
 #define _NNUE_TRAINER_TORCH_H_
 
@@ -8,11 +8,9 @@
 #include "../evaluate_nnue_torch_model.h"
 #include "../../../misc.h"
 
-namespace Eval {
-
-namespace NNUE {
+namespace Eval::NNUE {
 /**
- * @brief Torch‚Ìƒ‚ƒfƒ‹‚Æ•]‰¿ŠÖ”‚Ìƒ‚ƒfƒ‹‚Æ‚ÌŠÔ‚Åƒpƒ‰ƒ[ƒ^‚ğ‚â‚èæ‚è‚·‚é
+ * @brief Torchã®ãƒ¢ãƒ‡ãƒ«ã¨è©•ä¾¡é–¢æ•°ã®ãƒ¢ãƒ‡ãƒ«ã¨ã®é–“ã§ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ã‚’ã‚„ã‚Šå–ã‚Šã™ã‚‹
 */
 class TorchTrainer {
 public:
@@ -37,7 +35,7 @@ public:
   }
 
   void SetLearningRate(const double lr) {
-    // ŠwKŒW”‚Ì•ÏX•û–@
+    // å­¦ç¿’ä¿‚æ•°ã®å¤‰æ›´æ–¹æ³•
     // https://stackoverflow.com/questions/62415285/updating-learning-rate-with-libtorch-1-5-and-optimiser-options-in-c
     for (auto param_group : optimizer.param_groups()) {
       // Static cast needed as options() returns OptimizerOptions(base class)
@@ -78,10 +76,7 @@ private:
   void DequantizeAffine3();
 };
 
-}  // namespace NNUE
-
-}  // namespace Eval
-
+}  // namespace Eval::NNUE
 #endif // defined(EVAL_LEARN) && defined(EVAL_NNUE) && defined(USE_LIBTORCH)
 
 #endif // _NNUE_TRAINER_TORCH_H_
