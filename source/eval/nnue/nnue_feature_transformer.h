@@ -15,42 +15,6 @@
 #include <cstring>  // std::memset()
 
 namespace Eval::NNUE {
-// FeatureTransformerの後の活性化関数をsigmoid関数にするためのテーブル
-struct FeatureSigmoidTable {
-	// テーブルの半分のサイズ
-	// 入力が0の場合に参照するテーブルのインデックス
-	static constexpr int kHalfSize = 703;
-
-	uint8_t table[kHalfSize * 2];
-	uint8_t* center;
-
-	FeatureSigmoidTable():center(table+kHalfSize) {
-		// マイナス側
-		for (int i = -1; i >= -kHalfSize; --i) {
-			const double x = i / 127.0;
-			const double y = exp(x) / (1 + exp(x));
-			center[i] = static_cast<uint8_t>(floor(y * 127 + 0.5));
-		}
-		// プラス側
-		for (int i = 0; i < kHalfSize; ++i) {
-			const double x = i / 127.0;
-			const double y = 1 / (1 + exp(-x));
-			// 最大でも126になるようにkHalfSizeを調整しているはずなので、オーバーフローはない
-			center[i] = static_cast<uint8_t>(floor(y * 127 + 0.5));
-		}
-	}
-
-	uint8_t operator[](const int16_t x)const {
-		if (x >= kHalfSize) {
-			return 127;
-		} else if (x < -kHalfSize) {
-			return 0;
-		} else {
-			return center[x];
-		}
-	}
-};
-
 // If vector instructions are enabled, we update and refresh the
 // accumulator tile by tile such that each tile fits in the CPU's
 // vector registers.
@@ -153,8 +117,6 @@ class FeatureTransformer {
 		for (std::size_t i = 0; i < kHalfDimensions; ++i) biases_[i] = read_little_endian<BiasType>(stream);
 		for (std::size_t i = 0; i < kHalfDimensions * kInputDimensions; ++i)
 			weights_[i] = read_little_endian<WeightType>(stream);
-
-		sigmoid_table = FeatureSigmoidTable();
 		return !stream.fail();
 	}
 
@@ -199,6 +161,17 @@ class FeatureTransformer {
 		constexpr IndexType kNumChunks = kHalfDimensions / kSimdWidth;
 		constexpr int       kControl   = 0b11011000;
 		const __m256i       kZero      = _mm256_setzero_si256();
+		// だいだい1/3の値
+		// 42, 127-42=85
+		const __m256i bend_a = _mm256_set1_epi16(42);
+		const __m256i bend_b = _mm256_set1_epi16(85);
+		const auto bend = [&](const __m256i sum) {
+			__m256i tmp0_a = _mm256_sub_epi16(bend_a, sum);
+			__m256i tmp0_b = _mm256_sub_epi16(sum, bend_b);
+			tmp0_a = _mm256_slli_epi16(_mm256_max_epi16(tmp0_a, kZero), 1);
+			tmp0_b = _mm256_slli_epi16(_mm256_max_epi16(tmp0_b, kZero), 1);
+			return _mm256_add_epi16(_mm256_sub_epi16(sum, tmp0_b), tmp0_a);
+		};
 
 #elif defined(USE_SSE2)
 		constexpr IndexType kNumChunks = kHalfDimensions / kSimdWidth;
@@ -232,7 +205,7 @@ class FeatureTransformer {
 			}
 
 #elif defined(USE_AVX2)
-			//auto out = reinterpret_cast<__m256i*>(&output[offset]);
+			auto out = reinterpret_cast<__m256i*>(&output[offset]);
 			for (IndexType j = 0; j < kNumChunks; ++j) {
 				__m256i sum0 =
 				    _mm256_load_si256(&reinterpret_cast<const __m256i*>(accumulation[perspectives[p]][0])[j * 2 + 0]);
@@ -244,12 +217,11 @@ class FeatureTransformer {
 					sum1 = _mm256_add_epi16(
 					    sum1, reinterpret_cast<const __m256i*>(accumulation[perspectives[p]][i])[j * 2 + 1]);
 				}
-				for (int k = 0; k < kSimdWidth / 2; ++k) {
-					output[offset + j * kSimdWidth + k] = sigmoid_table[sum0.m256i_i16[k]];
-					output[offset + j * kSimdWidth + k + kSimdWidth / 2] = sigmoid_table[sum1.m256i_i16[k]];
-				}
-				//_mm256_store_si256(&out[j], _mm256_permute4x64_epi64(
-				//                                _mm256_max_epi8(_mm256_packs_epi16(sum0, sum1), kZero), kControl));
+				sum0 = bend(sum0);
+				sum1 = bend(sum1);
+
+				_mm256_store_si256(&out[j], _mm256_permute4x64_epi64(
+				                                _mm256_max_epi8(_mm256_packs_epi16(sum0, sum1), kZero), kControl));
 			}
 
 #elif defined(USE_SSE2)
@@ -447,9 +419,6 @@ class FeatureTransformer {
 	// パラメータ
 	alignas(kCacheLineSize) BiasType biases_[kHalfDimensions];
 	alignas(kCacheLineSize) WeightType weights_[kHalfDimensions * kInputDimensions];
-
-	// 活性化関数として非線形な変換をするテーブル
-	FeatureSigmoidTable sigmoid_table;
 };  // class FeatureTransformer
 
 }  // namespace Eval::NNUE
