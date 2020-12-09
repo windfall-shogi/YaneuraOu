@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #ifndef _EVALUATE_NNUE_TORCH_MODEL_H_
 #define _EVALUATE_NNUE_TORCH_MODEL_H_
 
@@ -39,20 +39,20 @@ struct EmbeddingImpl : torch::nn::Module {
   torch::nn::Embedding embedding;
   torch::Tensor bias;
 };
-// shared_ptr‚İ‚½‚¢‚É—Ç‚¢Š´‚¶‚É‚µ‚Ä‚­‚ê‚é
+// shared_ptrã¿ãŸã„ã«è‰¯ã„æ„Ÿã˜ã«ã—ã¦ãã‚Œã‚‹
 TORCH_MODULE(Embedding);
 
 struct ClippedReLUImpl : torch::nn::Module {
   ClippedReLUImpl() = default;
 
   torch::Tensor forward(torch::Tensor input) {
-    // ã‘¤‚ğƒNƒŠƒbƒv
+    // ä¸Šå´ã‚’ã‚¯ãƒªãƒƒãƒ—
     auto h = 1 - torch::relu(1 - input);
-    // ‰º‘¤‚ğƒNƒŠƒbƒv
+    // ä¸‹å´ã‚’ã‚¯ãƒªãƒƒãƒ—
     return h.relu_();
   }
 };
-// shared_ptr‚İ‚½‚¢‚É—Ç‚¢Š´‚¶‚É‚µ‚Ä‚­‚ê‚é
+// shared_ptrã¿ãŸã„ã«è‰¯ã„æ„Ÿã˜ã«ã—ã¦ãã‚Œã‚‹
 TORCH_MODULE(ClippedReLU);
 
 
@@ -81,8 +81,12 @@ struct NetImpl : torch::nn::Module {
     const auto q = feature_transformer(input_q);
     auto h = torch::cat({ p, q }, 1);
 
+	// æŠ˜ã‚Œæ›²ãŒã‚Šã‚’è¿½åŠ 
+	auto bend_a = relu((42.0 / 127 - h) * 0.5);
+	auto bend_b = relu((h - 85.0 / 127) * 0.5);
+	h = h + bend_a - bend_b;
+
     //h = relu(h);
-    h = sigmoid(h);
     h = affine1(h);
 
     h = relu(h);
@@ -99,7 +103,7 @@ struct NetImpl : torch::nn::Module {
   ClippedReLU relu;
   torch::nn::Sigmoid sigmoid;
 };
-// shared_ptr‚İ‚½‚¢‚É—Ç‚¢Š´‚¶‚É‚µ‚Ä‚­‚ê‚é
+// shared_ptrã¿ãŸã„ã«è‰¯ã„æ„Ÿã˜ã«ã—ã¦ãã‚Œã‚‹
 TORCH_MODULE(Net);
 }  // namespace NNUE
 
