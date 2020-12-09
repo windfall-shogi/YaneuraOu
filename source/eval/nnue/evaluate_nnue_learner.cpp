@@ -310,13 +310,13 @@ void UpdateParametersTorch(u64 epoch) {
         for (const auto feature : it->training_features[i]) {
           const auto index = feature.GetIndex();
           const auto count = feature.GetCount();
-          for (int j = 0; j < count; ++j) {
+          for (IndexType j = 0; j < count; ++j) {
             indices[i].push_back(index);
           }
         }
       }
-      weights.push_back(it->weight);
-      signs.push_back(it->sign);
+      weights.push_back(static_cast<LearnFloatType>(it->weight));
+      signs.push_back(static_cast<LearnFloatType>(it->sign));
       target_values.push_back(it->psv.score);
       game_results.push_back(it->psv.game_result);
     }
