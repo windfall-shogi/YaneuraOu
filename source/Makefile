@@ -63,8 +63,8 @@ DEBUG = OFF
 
 # 使用するコンパイラ (compiler)
 # ※ clangでコンパイルしたほうがgccより数%速いっぽい。
-#COMPILER = g++
-COMPILER = clang++
+COMPILER = g++
+#COMPILER = clang++
 
 
 # エンジンの表示名 (engine displayname)
@@ -79,7 +79,7 @@ COMPILER = clang++
 
 
 # 標準的なコンパイルオプション (standard compile options)
-CPPFLAGS   = -std=c++17 -fno-exceptions -fno-rtti -Wextra -Ofast -MMD -MP -fpermissive
+CPPFLAGS   = -std=c++17 -Wextra -Ofast -MMD -MP -fpermissive
 WCPPFLAGS  =
 LDFLAGS  =
 LIBS     =
@@ -198,6 +198,10 @@ ifeq ($(findstring YANEURAOU_ENGINE_NNUE,$(YANEURAOU_EDITION)),YANEURAOU_ENGINE_
 	ifeq ($(MSYSTEM),MINGW64)
 		BLAS += -I$(shell cygpath -aw /mingw64/include/OpenBLAS)
 	endif
+	BLAS += -DUSE_LIBTORCH
+	BLAS += -I../externals/libtorch/include
+	BLAS += -I../externals/libtorch/include/torch/csrc/api/include
+	BLAS_LDFLAGS += -L../externals/libtorch/lib -lmkldnn -lc10 -ltorch_cpu
 endif
 
 CPPFLAGS += -DNO_EXCEPTIONS
