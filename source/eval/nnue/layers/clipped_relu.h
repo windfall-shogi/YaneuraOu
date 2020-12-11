@@ -1,4 +1,4 @@
-﻿// Definition of layer ClippedReLU of NNUE evaluation function
+// Definition of layer ClippedReLU of NNUE evaluation function
 // NNUE評価関数の層ClippedReLUの定義
 
 #ifndef NNUE_LAYERS_CLIPPED_RELU_H_INCLUDED
@@ -170,7 +170,7 @@ class ClippedReLU {
   // 学習用クラスをfriendにする
   friend class Trainer<ClippedReLU>;
 #if defined(USE_LIBTORCH)
-  friend class TorchTrainer;
+  friend class Eval::NNUE::TorchTrainer;
 #endif // defined(USE_LIBTORCH)
 
   // この層の直前の層

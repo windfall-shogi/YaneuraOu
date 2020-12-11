@@ -1,4 +1,4 @@
-﻿// Definition of layer AffineTransform of NNUE evaluation function
+// Definition of layer AffineTransform of NNUE evaluation function
 // NNUE評価関数の層AffineTransformの定義
 
 #ifndef NNUE_LAYERS_AFFINE_TRANSFORM_H_INCLUDED
@@ -727,7 +727,7 @@ class AffineTransform {
   // 学習用クラスをfriendにする
   friend class Trainer<AffineTransform>;
 #if defined(USE_LIBTORCH)
-  friend class TorchTrainer;
+  friend class Eval::NNUE::TorchTrainer;
 #endif // defined(USE_LIBTORCH)
 
 	// この層の直前の層
