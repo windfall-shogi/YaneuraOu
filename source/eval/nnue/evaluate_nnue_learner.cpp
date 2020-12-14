@@ -354,6 +354,8 @@ void UpdateParametersTorch(u64 epoch) {
     loss.backward();
 
     torch_trainer->optimizer.step();
+	// 全結合層のkernelを[-128, 127]に対応する範囲でクリップする
+	torch_trainer->net->Constraint();
   }
   // パラメータを量子化
   // 探索用の評価関数を更新する

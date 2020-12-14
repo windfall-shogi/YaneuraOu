@@ -98,6 +98,21 @@ struct NetImpl : torch::nn::Module {
     return h;
   }
 
+  void Constraint() {
+    ConstraintAffine(affine1, false);
+    ConstraintAffine(affine2, false);
+    ConstraintAffine(affine3, true);
+  }
+
+ private:
+  void ConstraintAffine(torch::nn::Linear& affine, const bool is_output_layer) {
+    auto& weight = affine->weight;
+    const float scale = is_output_layer ? (600 * 16) : 64;
+    weight.clamp_(-128.0f / scale, 127.0f / scale);
+  }
+
+ public:
+
   Embedding feature_transformer;
   torch::nn::Linear affine1, affine2, affine3;
   ClippedReLU relu;
