@@ -108,7 +108,10 @@ struct NetImpl : torch::nn::Module {
   void ConstraintAffine(torch::nn::Linear& affine, const bool is_output_layer) {
     auto& weight = affine->weight;
     const float scale = is_output_layer ? (600 * 16) : 64;
-    weight.clamp_(-128.0f / scale, 127.0f / scale);
+    // in placeで書き換えると勾配が計算できなくなる
+    const auto& tmp = weight.clamp(-128.0f / scale, 127.0f / scale);
+    std::copy_n(tmp.data_ptr<float>(), weight.numel(),
+                weight.data_ptr<float>());
   }
 
  public:
