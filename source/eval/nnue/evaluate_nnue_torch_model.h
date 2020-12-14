@@ -86,7 +86,7 @@ struct NetImpl : torch::nn::Module {
 	auto bend_b = relu((h - 85.0 / 127) * 0.5);
 	h = h + bend_a - bend_b;
 
-    //h = relu(h);
+    h = relu(h);
     h = affine1(h);
 
     h = relu(h);
